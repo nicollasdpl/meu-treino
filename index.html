@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meu Treino</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
+    <h1>🏋️ Meu Treino</h1>
+    <button onclick="startTimer()">Iniciar Treino</button>
+    <button onclick="stopTimer()">Finalizar Treino</button>
+    <p id="timer">⏱️ 00:00:00</p>
+  </header>
+
+  <nav>
+    <button onclick="showDay('segunda')">Segunda</button>
+    <button onclick="showDay('terca')">Terça</button>
+    <button onclick="showDay('quarta')">Quarta</button>
+    <button onclick="showDay('quinta')">Quinta</button>
+    <button onclick="showDay('sexta')">Sexta</button>
+  </nav>
+
+  <main id="content">
+    <p>Selecione o dia do treino ⬆️</p>
+  </main>
+
+  <section id="grafico">
+    <h2>Evolução (Supino Reto)</h2>
+    <canvas id="chartSupino"></canvas>
+  </section>
+
+  <script src="script.js"></script>
+</body>
+</html>
