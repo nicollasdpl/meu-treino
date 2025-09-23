@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="viewport-fit=cover, width=device-width, initial-scale=1, user-scalable=no"/>
+  <title>Meu Treino</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#6f42c1"/>
+  <!-- iOS: tela cheia / status bar / título -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Meu Treino">
+  <!-- iOS: ícone (pode usar o mesmo de 192px; ideal: 180x180) -->
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+
+  <link rel="stylesheet" href="style.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
+    <h1>🏋️ Meu Treino</h1>
+    <p id="subheader"></p>
+    <div class="header-actions">
+      <!-- o sino agora alterna ENTRE mutado e desmutado -->
+      <button id="btnNotify" class="ghost small" title="Ativar/Desativar alertas">🔕</button>
+      <button id="btnTheme" class="ghost small" title="Tema claro/escuro">🌙</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- HOME -->
+    <section id="home" class="pagina">
+      <div class="toolbar">
+        <button id="prevMes" class="ghost">&larr;</button>
+        <h2 id="mesAno"></h2>
+        <button id="proxMes" class="ghost">&rarr;</button>
+      </div>
+
+      <div class="semana-labels">
+        <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
+      </div>
+      <div id="calendario" class="grid-cal"></div>
+
+      <div class="resumo">
+        <div class="card-mini"><strong>Dias treinados:</strong> <span id="diasTreinadosMes">0</span></div>
+        <div class="card-mini"><strong>Último treino:</strong> <span id="ultimoTreino">—</span></div>
+        <div class="card-mini"><strong>Duração média:</strong> <span id="duracaoMedia">—</span></div>
+      </div>
+    </section>
+
+    <!-- PERFIL -->
+    <section id="perfil" class="pagina" style="display:none">
+      <h2>👤 Perfil & Sincronização</h2>
+
+      <div class="card">
+        <p><b>Status:</b> <span id="userStatus" class="muted">Inicializando…</span></p>
+        <p><b>Sincronização:</b> <span id="syncInfo" class="muted">—</span></p>
+        <div class="stack">
+          <button id="btnLogin" class="primary">Entrar com Google</button>
+          <button id="btnLogout" class="ghost" style="display:none">Sair</button>
+        </div>
+      </div>
+
+      <div class="card grid-2">
+        <div>
+          <h3>Backup manual</h3>
+          <div class="stack">
+            <button id="btnExport" class="ghost">Exportar JSON</button>
+            <input type="file" id="fileImport" accept="application/json" style="display:none"/>
+            <button id="btnImport" class="ghost">Importar JSON</button>
+          </div>
+          <small class="muted">Mesmo com nuvem, exporte às vezes como backup extra.</small>
+        </div>
+        <div>
+          <h3>Sobre</h3>
+          <p>Treino, calendário, evolução e sincronização automática com Firebase (quando logado).</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- TREINO -->
+    <section id="treino" class="pagina" style="display:none">
+      <div class="toolbar">
+        <h2>💪 Treino</h2>
+        <div class="timer">
+          <span id="timer">00:00:00</span>
+          <button id="btnTimer" class="primary">Iniciar</button>
+        </div>
+      </div>
+
+      <div class="rest-controls card-mini">
+        <label>Descanso (seg): <input id="restSeg" type="number" min="10" step="5" value="60"></label>
+        <button id="btnRest" class="ghost">Iniciar descanso</button>
+        <span id="restDisplay" class="muted">—</span>
+        <button id="btnCopyLast" class="ghost" title="Copiar última sessão registrada para este dia">Copiar última sessão</button>
+      </div>
+
+      <div class="tabs">
+        <button class="tab-btn active" data-dia="segunda">Seg (Costas+Bíceps)</button>
+        <button class="tab-btn" data-dia="terca">Ter (Peito+Tríceps)</button>
+        <button class="tab-btn" data-dia="quarta">Qua (Ombro)</button>
+        <button class="tab-btn" data-dia="quinta">Qui (Perna)</button>
+        <button class="tab-btn" data-dia="sexta">Sex (Braços+Abs)</button>
+      </div>
+
+      <div id="treinoDoDia" class="hint"></div>
+      <div id="listaExercicios"></div>
+
+      <div class="actions">
+        <button id="salvarTreino" class="success">Salvar sessão</button>
+        <span id="statusSave" class="muted"></span>
+      </div>
+    </section>
+
+    <!-- GRÁFICOS -->
+    <section id="graficos" class="pagina" style="display:none">
+      <h2>📊 Evolução</h2>
+
+      <div class="card grid-2">
+        <div>
+          <label for="selectExercicio"><b>Exercício:</b></label>
+          <select id="selectExercicio"></select>
+        </div>
+        <div>
+          <label for="periodo"><b>Período:</b></label>
+          <select id="periodo">
+            <option value="30">últimos 30 dias</option>
+            <option value="90" selected>últimos 90 dias</option>
+            <option value="180">últimos 180 dias</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="chips" id="filtroDia">
+        <button class="chip active" data-dia="all">Todos</button>
+        <button class="chip" data-dia="segunda">Seg</button>
+        <button class="chip" data-dia="terca">Ter</button>
+        <button class="chip" data-dia="quarta">Qua</button>
+        <button class="chip" data-dia="quinta">Qui</button>
+        <button class="chip" data-dia="sexta">Sex</button>
+      </div>
+
+      <canvas id="chartCanvas" height="160"></canvas>
+
+      <h3>📦 Volume semanal</h3>
+      <canvas id="volumeCanvas" height="140"></canvas>
+
+      <div class="card">
+        <h3>🗂️ Sessões detalhadas (recentes)</h3>
+        <div id="listaSessoesDetalhe"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <nav>
+      <button onclick="mostrarPagina('home')" title="Home">🏠</button>
+      <button onclick="mostrarPagina('perfil')" title="Perfil">👤</button>
+      <button onclick="mostrarPagina('treino')" title="Treino">💪</button>
+      <button onclick="mostrarPagina('graficos')" title="Gráficos">📊</button>
+    </nav>
+  </footer>
+
+  <!-- Overlay do descanso -->
+  <div id="restOverlay" class="overlay hidden">
+    <div class="modal">
+      <h2 style="margin:0 0 8px">⏰ Descanso finalizado!</h2>
+      <p class="muted" style="margin:0 0 12px">Pronto para a próxima série.</p>
+      <div class="stack">
+        <button id="btnOverlayOk" class="primary">OK</button>
+        <button id="btnOverlayBuzz" class="ghost">Vibrar/Beep de novo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- App -->
+  <script type="module" src="script.js"></script>
+
+  <!-- Registro do Service Worker (PWA/Offline/Notificações) -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      // calcula caminho correto pro GitHub Pages (ex.: /meu-treino/)
+      const BASE = location.pathname.endsWith('/') ? location.pathname : location.pathname.replace(/\/[^\/]*$/, '/');
+      navigator.serviceWorker.register(`${BASE}service-worker.js`, { scope: BASE })
+        .catch(console.error);
+    }
+  </script>
+</body>
+</html>
