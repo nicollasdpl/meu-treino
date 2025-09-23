@@ -19,6 +19,40 @@ main {
   min-height: 70vh;
 }
 
+/* Calendário */
+#calendario {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.dia {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.dia.fora {
+  background: #ddd;
+  color: #999;
+}
+
+.dia.nao-treino {
+  background: white;
+  border: 1px solid #ccc;
+}
+
+.dia.treino {
+  background: black;
+  color: white;
+}
+
 /* Rodapé fixo */
 footer {
   position: fixed;
