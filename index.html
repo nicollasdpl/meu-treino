@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Meu Treino</title>
+  <link rel="stylesheet" href="style.css"/>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Firebase (compat para facilitar sem build) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+  <script>
+    // 🔑 COLE AQUI SUA CONFIG DO FIREBASE (substitua TODO o objeto abaixo)
+    // Pegue em: Firebase Console > Project settings > Your apps > Web app
+    // Exemplo de formato:
+    /*
+    const firebaseConfig = {
+      apiKey: "XXXXXXXXXXXX",
+      authDomain: "seu-projeto.firebaseapp.com",
+      projectId: "seu-projeto",
+      storageBucket: "seu-projeto.appspot.com",
+      messagingSenderId: "1234567890",
+      appId: "1:1234567890:web:abcdef",
+    };
+    */
+    const firebaseConfig = {
+      // TODO: cole seu config aqui
+    };
+    // Evita erro se o user abrir antes de você colar o config
+    if (Object.keys(firebaseConfig).length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+  </script>
+</head>
+<body>
+  <header>
+    <h1>🏋️ Meu Treino</h1>
+    <p id="subheader"></p>
+  </header>
+
+  <main>
+    <!-- HOME / CALENDÁRIO -->
+    <section id="home" class="pagina">
+      <div class="toolbar">
+        <button id="prevMes" class="ghost">&larr;</button>
+        <h2 id="mesAno"></h2>
+        <button id="proxMes" class="ghost">&rarr;</button>
+      </div>
+
+      <div class="semana-labels">
+        <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
+      </div>
+      <div id="calendario" class="grid-cal"></div>
+
+      <div class="resumo">
+        <div class="card-mini"><strong>Dias treinados:</strong> <span id="diasTreinadosMes">0</span></div>
+        <div class="card-mini"><strong>Último treino:</strong> <span id="ultimoTreino">—</span></div>
+        <div class="card-mini"><strong>Duração média:</strong> <span id="duracaoMedia">—</span></div>
+      </div>
+    </section>
+
+    <!-- PERFIL / LOGIN -->
+    <section id="perfil" class="pagina" style="display:none">
+      <h2>👤 Perfil</h2>
+
+      <div class="card grid-2">
+        <div>
+          <p><b>Nome:</b> Nicollas</p>
+          <p><b>Peso:</b> 87 kg</p>
+          <p><b>Objetivo:</b> Hipertrofia + Definição</p>
+        </div>
+        <div>
+          <h3>Conta</h3>
+          <p id="userStatus">Desconectado</p>
+          <div class="stack">
+            <button id="btnLoginGoogle" class="primary">Entrar com Google</button>
+            <button id="btnLogout" class="ghost" disabled>Sair</button>
+          </div>
+          <small id="syncInfo" class="muted">Sincronização: —</small>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Backup</h3>
+        <div class="stack">
+          <button id="btnExport" class="ghost">Exportar JSON (local)</button>
+          <input type="file" id="fileImport" accept="application/json" style="display:none"/>
+          <button id="btnImport" class="ghost">Importar JSON</button>
+        </div>
+        <small class="muted">Dica: exporte de vez em quando para ter um backup manual.</small>
+      </div>
+    </section>
+
+    <!-- TREINO -->
+    <section id="treino" class="pagina" style="display:none">
+      <div class="toolbar">
+        <h2>💪 Treino</h2>
+        <div class="timer">
+          <span id="timer">00:00:00</span>
+          <button id="btnTimer" class="primary">Iniciar</button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab-btn active" data-dia="segunda">Seg (Costas+Bíceps)</button>
+        <button class="tab-btn" data-dia="terca">Ter (Peito+Tríceps)</button>
+        <button class="tab-btn" data-dia="quarta">Qua (Ombro)</button>
+        <button class="tab-btn" data-dia="quinta">Qui (Perna)</button>
+        <button class="tab-btn" data-dia="sexta">Sex (Braços+Abs)</button>
+      </div>
+
+      <div id="treinoDoDia" class="hint"></div>
+      <div id="listaExercicios"></div>
+
+      <div class="actions">
+        <button id="salvarTreino" class="success">Salvar sessão</button>
+        <span id="statusSave" class="muted"></span>
+      </div>
+    </section>
+
+    <!-- GRÁFICOS -->
+    <section id="graficos" class="pagina" style="display:none">
+      <h2>📊 Evolução</h2>
+      <div class="card">
+        <label for="selectExercicio"><b>Exercício:</b></label>
+        <select id="selectExercicio"></select>
+      </div>
+      <canvas id="chartCanvas"></canvas>
+
+      <div class="card grid-2">
+        <div>
+          <h3>Últimas sessões</h3>
+          <ul id="listaUltimas"></ul>
+        </div>
+        <div>
+          <h3>Resumo</h3>
+          <p><b>PR (maior carga):</b> <span id="prExercicio">—</span></p>
+          <p><b>Sessões registradas:</b> <span id="qtdSessoesEx">0</span></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <nav>
+      <button onclick="mostrarPagina('home')" title="Home">🏠</button>
+      <button onclick="mostrarPagina('perfil')" title="Perfil">👤</button>
+      <button onclick="mostrarPagina('treino')" title="Treino">💪</button>
+      <button onclick="mostrarPagina('graficos')" title="Gráficos">📊</button>
+    </nav>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
