@@ -8,30 +8,44 @@
 </head>
 <body>
   <header>
-    <h2>Boas-vindas, Nicollas</h2>
-    <p id="treino-dia">O treino do dia é: <strong>Costas + Bíceps</strong></p>
-    <button id="start-treino">Iniciar treino</button>
-    <p id="timer">00:00:00</p>
+    <h1>Meu Treino</h1>
   </header>
 
+  <!-- Seções -->
   <main>
-    <section id="exercicios">
-      <!-- Cards de exercícios aparecem aqui -->
-    </section>
+    <div id="home" class="pagina">
+      <h2>🏠 Home</h2>
+      <p>Bem-vindo ao seu app de treinos! Aqui vai aparecer o calendário.</p>
+    </div>
 
-    <section id="calendario">
-      <h3>Frequência de Treinos</h3>
-      <div id="calendar-grid"></div>
-    </section>
+    <div id="perfil" class="pagina" style="display:none">
+      <h2>👤 Perfil</h2>
+      <p>Seus dados pessoais, metas e ajustes aparecerão aqui.</p>
+    </div>
+
+    <div id="treino" class="pagina" style="display:none">
+      <h2>💪 Treino</h2>
+      <button onclick="iniciarTreino()">Iniciar treino</button>
+      <div id="treinoAtivo"></div>
+    </div>
+
+    <div id="graficos" class="pagina" style="display:none">
+      <h2>📊 Gráficos</h2>
+      <canvas id="grafico"></canvas>
+    </div>
   </main>
 
-  <nav>
-    <button onclick="mostrarHome()">🏠</button>
-    <button onclick="mostrarPerfil()">👤</button>
-    <button onclick="mostrarTreino()">💪</button>
-    <button onclick="mostrarRelatorios()">📊</button>
-  </nav>
+  <!-- Rodapé -->
+  <footer>
+    <nav>
+      <button onclick="mostrarPagina('home')">🏠</button>
+      <button onclick="mostrarPagina('perfil')">👤</button>
+      <button onclick="mostrarPagina('treino')">💪</button>
+      <button onclick="mostrarPagina('graficos')">📊</button>
+    </nav>
+  </footer>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
