@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meu Treino</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h2>Boas-vindas, Nicollas</h2>
+    <p id="treino-dia">O treino do dia é: <strong>Costas + Bíceps</strong></p>
+    <button id="start-treino">Iniciar treino</button>
+    <p id="timer">00:00:00</p>
+  </header>
+
+  <main>
+    <section id="exercicios">
+      <!-- Cards de exercícios aparecem aqui -->
+    </section>
+
+    <section id="calendario">
+      <h3>Frequência de Treinos</h3>
+      <div id="calendar-grid"></div>
+    </section>
+  </main>
+
+  <nav>
+    <button onclick="mostrarHome()">🏠</button>
+    <button onclick="mostrarPerfil()">👤</button>
+    <button onclick="mostrarTreino()">💪</button>
+    <button onclick="mostrarRelatorios()">📊</button>
+  </nav>
+
+  <script src="script.js"></script>
+</body>
+</html>
