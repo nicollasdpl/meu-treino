@@ -1,54 +1,61 @@
-let timer;
-let segundos = 0;
-
-document.getElementById("start-treino").addEventListener("click", () => {
-  if (timer) {
-    clearInterval(timer);
-    salvarTreino();
-    document.getElementById("start-treino").innerText = "Iniciar treino";
-    timer = null;
-  } else {
-    segundos = 0;
-    timer = setInterval(atualizarTimer, 1000);
-    document.getElementById("start-treino").innerText = "Finalizar treino";
-  }
-});
-
-function atualizarTimer() {
-  segundos++;
-  const h = String(Math.floor(segundos / 3600)).padStart(2, "0");
-  const m = String(Math.floor((segundos % 3600) / 60)).padStart(2, "0");
-  const s = String(segundos % 60).padStart(2, "0");
-  document.getElementById("timer").innerText = `${h}:${m}:${s}`;
+/* Reset básico */
+body, html {
+  margin: 0;
+  padding: 0;
+  font-family: Arial, sans-serif;
+  background: #f5f5f5;
+  color: #333;
 }
 
-function salvarTreino() {
-  const hoje = new Date().toISOString().split("T")[0];
-  let treinos = JSON.parse(localStorage.getItem("treinos")) || [];
-  treinos.push({ data: hoje, duracao: segundos });
-  localStorage.setItem("treinos", JSON.stringify(treinos));
-  montarCalendario();
+header {
+  background: #4a2db6;
+  color: white;
+  padding: 15px;
+  text-align: center;
 }
 
-function montarCalendario() {
-  const grid = document.getElementById("calendar-grid");
-  grid.innerHTML = "";
-  const hoje = new Date();
-  const diasNoMes = new Date(hoje.getFullYear(), hoje.getMonth()+1, 0).getDate();
-  const treinos = JSON.parse(localStorage.getItem("treinos")) || [];
-
-  for (let d = 1; d <= diasNoMes; d++) {
-    const diaDiv = document.createElement("div");
-    diaDiv.classList.add("dia");
-    diaDiv.innerText = d;
-
-    const dataStr = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-    if (treinos.find(t => t.data === dataStr)) {
-      diaDiv.classList.add("treino");
-    }
-
-    grid.appendChild(diaDiv);
-  }
+main {
+  padding: 20px;
+  min-height: 70vh;
 }
 
-montarCalendario();
+/* Rodapé fixo */
+footer {
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  background: #222;
+  padding: 10px 0;
+}
+
+footer nav {
+  display: flex;
+  justify-content: space-around;
+}
+
+footer button {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+footer button:hover {
+  color: #4a2db6;
+}
+
+/* Botão iniciar treino */
+button {
+  background: #4a2db6;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  font-size: 16px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #36208c;
+}
