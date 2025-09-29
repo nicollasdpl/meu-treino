@@ -15,7 +15,7 @@ html,body{margin:0;padding:0;font-family:system-ui,Segoe UI,Roboto,Helvetica,Ari
 header{
   position:sticky;top:0;z-index:10;
   background:var(--primary);color:#fff;padding:14px 16px;
-  display:flex;gap:12px;align-items:center
+  display:flex;gap:12px;align-items:center;min-height:58px
 }
 header h1{margin:0;font-size:22px}
 header p{margin:0;opacity:.9;flex:1}
@@ -31,7 +31,7 @@ main{
 .muted{color:var(--muted)}
 .small{font-size:12px}
 
-.toolbar{display:flex;align-items:center;gap:10px}
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .toolbar h2{margin:8px 0 12px 0}
 
 .ghost,.primary,.success,nav button,.chip{
@@ -97,12 +97,7 @@ nav{
   border-top:1px solid var(--border);
   backdrop-filter:saturate(180%) blur(10px)
 }
-nav button{
-  font-size:22px;
-  padding:16px 0; border-radius:16px
-}
-
-.rest-controls input{width:88px}
+nav button{font-size:22px;padding:16px 0;border-radius:16px}
 
 /* Chips de filtro */
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
@@ -113,3 +108,15 @@ nav button{
 .overlay.hidden{display:none}
 .modal{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:18px;padding:20px;max-width:360px;width:90%;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.35)}
 .stack{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+
+/* Perfil */
+.profile-card{display:flex;align-items:center;gap:12px}
+.profile-card img{width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid var(--border)}
+.habits-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:10px
+}
+@media (max-width:700px){.habits-grid{grid-template-columns:1fr}}
+.habits-grid label{
+  border:1px solid var(--border);background:var(--card);padding:10px;border-radius:12px;display:flex;gap:10px;align-items:center
+}
+.habits-grid input[type=checkbox]{transform:scale(1.2)}
