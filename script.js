@@ -1,4 +1,4 @@
-/*************** Firebase (igual antes) ***************/
+/*************** Firebase ***************/
 const FIREBASE_CFG = {
   apiKey: "AIzaSyAEewjrcLxpXSZMoOPo4nkuTg3lTZI-J78",
   authDomain: "meu-treino-e4592.firebaseapp.com",
@@ -36,11 +36,13 @@ let firebaseOk = false;
         qs('#btnLogout').style.display = '';
         qs('#syncInfo').textContent = 'Sincronização: Conectado';
         await puxarDoFirestoreMesclarLocal();
+        atualizarPerfilUI();
       }else{
         qs('#userStatus').textContent = 'Não logado';
         qs('#btnLogin').style.display = '';
         qs('#btnLogout').style.display = 'none';
         qs('#syncInfo').textContent = 'Sincronização: Offline';
+        atualizarPerfilUI();
       }
       atualizarResumoHome();
     });
@@ -62,8 +64,9 @@ let firebaseOk = false;
 /*************** Utils ***************/
 const qs = sel => document.querySelector(sel);
 const qsa = sel => [...document.querySelectorAll(sel)];
+const todayStr = () => new Date().toISOString().slice(0,10);
 
-/*************** Treinos (com Leg press) ***************/
+/*************** Treinos ***************/
 const TREINOS = {
   segunda: [
     {nome:'Puxada triângulo alta', alvo:'3x8–12'},
@@ -90,7 +93,7 @@ const TREINOS = {
   ],
   quinta: [
     {nome:'Hack squat', alvo:'3x8–12'},
-    {nome:'Leg press', alvo:'3x10–12'},          // ADICIONADO
+    {nome:'Leg press', alvo:'3x10–12'},
     {nome:'Cadeira extensora', alvo:'3x12–15'},
     {nome:'Cadeira flexora', alvo:'3x12–15'},
     {nome:'Mesa flexora', alvo:'3x10–12'},
@@ -136,9 +139,10 @@ window.mostrarPagina = function(id){
   qs('#'+id).style.display='block';
   if(id==='graficos'){ popularListaExerciciosChart(); atualizarEvolucaoUI(); }
   if(id==='home'){ atualizarResumoHome(); }
+  if(id==='perfil'){ atualizarPerfilUI(); }
 };
 
-/*************** Local data (com migração p/ sets) ***************/
+/*************** Storage sessões (com migração p/ sets) ***************/
 function getSessoes(){
   const raw = JSON.parse(localStorage.getItem('sessoes')||'[]');
   raw.forEach(sess=>{
@@ -146,11 +150,7 @@ function getSessoes(){
       if(!e.sets){
         const peso = e.peso ?? '';
         const reps = e.reps ?? '';
-        e.sets = [
-          {peso, reps, done:false},
-          {peso, reps, done:false},
-          {peso, reps, done:false},
-        ];
+        e.sets = [{peso,reps,done:false},{peso,reps,done:false},{peso,reps,done:false}];
       }else{
         e.sets = e.sets.map(s=>({peso:s.peso??'', reps:s.reps??'', done:!!s.done}));
       }
@@ -161,7 +161,7 @@ function getSessoes(){
 }
 function setSessoes(a){ localStorage.setItem('sessoes', JSON.stringify(a)); }
 
-/*************** Firestore merge ***************/
+/*************** Firestore sessões ***************/
 async function puxarDoFirestoreMesclarLocal(){
   if(!firebaseOk || !fb.user) return;
   const { collection, getDocs } = fb._;
@@ -181,7 +181,7 @@ async function puxarDoFirestoreMesclarLocal(){
   const merged = [...byDate.values()].sort((a,b)=>a.data.localeCompare(b.data));
   setSessoes(merged);
   qs('#syncInfo').textContent = 'Sincronização: Sincronizado';
-  montarCalendario(); atualizarResumoHome();
+  montarCalendario(); atualizarResumoHome(); atualizarEvolucaoUI();
 }
 async function salvarNoFirestore(sessao){
   if(!firebaseOk || !fb.user) return;
@@ -270,7 +270,7 @@ function marcarHojeNoCalendario(){
   atualizarResumoHome();
 }
 
-/*************** Timer de treino (auto start na 1ª série) ***************/
+/*************** Timer de treino ***************/
 let timerId=null, startEpoch=Number(localStorage.getItem('sessionStart')||0);
 const timerEl = qs('#timer');
 
@@ -285,19 +285,21 @@ function startSessionIfNeeded(){
     localStorage.setItem('sessionStart', String(startEpoch));
   }
   if(!timerId){ timerId = setInterval(tick,1000); }
-  qs('#btnTimer').textContent='Finalizar';
+  const btns = qsa('#treino #btnTimer');
+  btns.forEach(b=> b.textContent='Finalizar');
 }
 function stopSession(){
   if(timerId){ clearInterval(timerId); timerId=null; }
   startEpoch = 0;
   localStorage.removeItem('sessionStart');
-  qs('#btnTimer').textContent='Iniciar';
+  const btns = qsa('#treino #btnTimer');
+  btns.forEach(b=> b.textContent='Iniciar');
 }
 tick();
 if(startEpoch) timerId=setInterval(tick,1000);
-
-qs('#btnTimer').addEventListener('click', ()=>{
-  if(timerId){ // parar e salvar
+qsa('#btnTimer').forEach? qsa('#btnTimer').forEach(b=>b.addEventListener('click',toggleTimer)) : qs('#btnTimer').addEventListener('click',toggleTimer);
+function toggleTimer(){
+  if(timerId){
     clearInterval(timerId); timerId=null;
     const duracao = Math.floor((Date.now()-startEpoch)/1000);
     stopSession();
@@ -305,7 +307,7 @@ qs('#btnTimer').addEventListener('click', ()=>{
   }else{
     startSessionIfNeeded();
   }
-});
+}
 function fmtDuracao(sec){
   const h=String(Math.floor(sec/3600)).padStart(2,'0');
   const m=String(Math.floor((sec%3600)/60)).padStart(2,'0');
@@ -313,7 +315,7 @@ function fmtDuracao(sec){
   return `${h}:${m}:${s}`;
 }
 
-/*************** Descanso: áudio + notificação + overlay ***************/
+/*************** Descanso + Notificação ***************/
 let audioCtx=null;
 function ensureAudioCtx(){
   if(!audioCtx){
@@ -384,8 +386,7 @@ function iniciarDescansoAuto(segundos){
     }
   },1000);
 }
-
-qs('#btnRest').addEventListener('click', async ()=>{
+qs('#btnRest').addEventListener('click', ()=>{
   if(restId){
     clearInterval(restId); restId=null; restDisplay.textContent='—';
     clearInterval(beepLoop); beepLoop=null; overlay.classList.add('hidden');
@@ -421,19 +422,6 @@ copyBtn?.addEventListener('click', ()=>{
   preencherComUltima(key);
 });
 
-// cria/acha contêiner do resumo de tonelagem
-function ensureTonelagemBox(){
-  let box = qs('#tonelagemBox');
-  if(!box){
-    box = document.createElement('div');
-    box.id = 'tonelagemBox';
-    box.className = 'card';
-    box.innerHTML = `<b>Tonelagem do dia</b><div id="tonelagemLista" class="small muted">—</div>`;
-    salvarBtn?.parentElement?.insertBefore(box, salvarBtn.nextSibling);
-  }
-  return box;
-}
-
 function montarExercicios(diaKey, prefill=true){
   const arr = TREINOS[diaKey] || [];
   treinoDoDiaEl.textContent = `Dia selecionado: ${labelDia(diaKey)} · Registre as cargas e reps (meta: 8–12 reps).`;
@@ -446,9 +434,7 @@ function montarExercicios(diaKey, prefill=true){
     const card = document.createElement('div');
     card.className='ex-card';
     card.innerHTML = `
-      <div class="ex-head">
-        <div><b>${ex.nome}</b><br><small>${ex.alvo}</small></div>
-      </div>
+      <div class="ex-head"><div><b>${ex.nome}</b><br><small>${ex.alvo}</small></div></div>
       <div class="sets" data-ex="${ex.nome}">
         ${[0,1,2].map(i => `
           <div class="set" data-set="${i}">
@@ -464,18 +450,18 @@ function montarExercicios(diaKey, prefill=true){
     listaExEl.appendChild(card);
   });
 
-  // marcar série → inicia sessão + descanso automático + recalcula tonelagem
+  // Check da série → inicia sessão + descanso + tonelagem
   listaExEl.querySelectorAll('button.tick').forEach(btn=>{
     btn.addEventListener('click', ()=>{
-      startSessionIfNeeded();                   // inicia timer do treino
+      startSessionIfNeeded();
       const setEl = btn.closest('.set');
-      setEl.classList.toggle('done');           // visual done
-      iniciarDescansoAuto();                    // descanso automático
-      atualizarTonelagemDoDia();                // resumo
+      setEl.classList.toggle('done');
+      iniciarDescansoAuto();
+      atualizarTonelagemDoDia();
     });
   });
 
-  // digitar S1 preenche S2/S3 se vazios
+  // Digitar S1 auto-preenche S2/S3 vazias
   listaExEl.querySelectorAll('.set[data-set="0"] .inp').forEach(inp=>{
     inp.addEventListener('change', ()=>{
       const nome = inp.dataset.ex;
@@ -483,13 +469,12 @@ function montarExercicios(diaKey, prefill=true){
       const val = inp.value;
       [1,2].forEach(i=>{
         const tgt = listaExEl.querySelector(`.sets[data-ex="${CSS.escape(nome)}"] .set[data-set="${i}"] ${field}`);
-        if (tgt && !tgt.value) tgt.value = val;
+        if(tgt && !tgt.value) tgt.value = val;
       });
       atualizarTonelagemDoDia();
     });
   });
 
-  // qualquer digitação recalcula tonelagem
   listaExEl.querySelectorAll('.inp').forEach(i=> i.addEventListener('input', atualizarTonelagemDoDia));
   ensureTonelagemBox();
   atualizarTonelagemDoDia();
@@ -523,7 +508,7 @@ function coletarInputsExercicios(){
     const nome = t.dataset.ex;
     if (map[nome]) map[nome].obs = t.value;
   });
-  // compat: também salva "peso/reps" como a série mais pesada do dia
+  // compat: salva "peso/reps" como max do dia
   Object.values(map).forEach(e=>{
     const pesos = e.sets.map(s=>Number(s.peso||0));
     const maxKg = Math.max(...pesos, 0);
@@ -555,7 +540,6 @@ function preencherComUltima(diaKey){
   atualizarTonelagemDoDia();
 }
 
-// iniciar com o dia atual
 (function initTabs(){
   const d = new Date().getDay();
   let key = 'segunda'; if(d===2) key='terca'; if(d===3) key='quarta'; if(d===4) key='quinta'; if(d===5) key='sexta';
@@ -566,7 +550,18 @@ function preencherComUltima(diaKey){
 })();
 salvarBtn.addEventListener('click', ()=> salvarSessaoAtual(null));
 
-// Tonelagem (só séries ✓)
+// Tonelagem
+function ensureTonelagemBox(){
+  let box = qs('#tonelagemBox');
+  if(!box){
+    box = document.createElement('div');
+    box.id = 'tonelagemBox';
+    box.className = 'card';
+    box.innerHTML = `<b>Tonelagem do dia</b><div id="tonelagemLista" class="small muted">—</div>`;
+    salvarBtn?.parentElement?.insertBefore(box, salvarBtn.nextSibling);
+  }
+  return box;
+}
 function tonelagemExercicioFromUI(nome){
   let total = 0;
   qsa(`.sets[data-ex="${CSS.escape(nome)}"] .set`).forEach(row=>{
@@ -592,17 +587,12 @@ function atualizarTonelagemDoDia(){
 }
 
 function salvarSessaoAtual(duracaoParam){
-  // se o timer estiver rodando e o user clicar "Salvar", calcula até agora
   let duracaoFinal = 0;
-  if(duracaoParam!=null){
-    duracaoFinal = duracaoParam;
-  }else if(startEpoch){
-    duracaoFinal = Math.floor((Date.now()-startEpoch)/1000);
-  }
+  if(duracaoParam!=null){ duracaoFinal = duracaoParam; }
+  else if(startEpoch){ duracaoFinal = Math.floor((Date.now()-startEpoch)/1000); }
 
-  const hoje = new Date();
-  const dataStr = hoje.toISOString().slice(0,10);
-  const diaKey = qs('.tab-btn.active')?.dataset.dia || DIAS_MAP[hoje.getDay()];
+  const dataStr = todayStr();
+  const diaKey = qs('.tab-btn.active')?.dataset.dia || DIAS_MAP[new Date().getDay()];
   const exercicios = coletarInputsExercicios();
 
   const nova = {data:dataStr, duracao:duracaoFinal||0, dia:diaKey, exercicios};
@@ -612,35 +602,12 @@ function salvarSessaoAtual(duracaoParam){
   marcarHojeNoCalendario();
   qs('#statusSave').textContent = '✅ Sessão salva!';
   setTimeout(()=>qs('#statusSave').textContent='',2000);
-  desenharGrafico(); desenharVolume(); preencherSessoesDetalhe();
+  desenharGrafico(); desenharVolume(); preencherSessoesDetalhe(); montarPRs();
   salvarNoFirestore(nova).catch(()=>{});
-
-  // após salvar, encerra sessão de tempo
   stopSession();
 }
 
-/*************** Backup ***************/
-qs('#btnExport').addEventListener('click', ()=>{
-  const blob = new Blob([localStorage.getItem('sessoes')||'[]'], {type:'application/json'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `sessoes_${new Date().toISOString().slice(0,10)}.json`;
-  a.click();
-});
-qs('#btnImport').addEventListener('click', ()=>qs('#fileImport').click());
-qs('#fileImport').addEventListener('change', (e)=>{
-  const file = e.target.files[0]; if(!file) return;
-  const reader = new FileReader();
-  reader.onload = ()=>{
-    try{
-      const arr = JSON.parse(reader.result);
-      if(Array.isArray(arr)){ setSessoes(arr); montarCalendario(); desenharGrafico(); desenharVolume(); preencherSessoesDetalhe(); atualizarResumoHome(); alert('Importado!'); }
-    }catch(_){ alert('Arquivo inválido'); }
-  };
-  reader.readAsText(file);
-});
-
-/*************** Evolução (usa sets) ***************/
+/*************** Evolução (KPIs + PRs + gráficos) ***************/
 let chart, volumeChart;
 const selectEx = qs('#selectExercicio');
 const filtroDiaWrap = qs('#filtroDia');
@@ -681,7 +648,6 @@ function maxPesoSessaoEx(s, nome){
   return m>0? m : (e.peso? Number(e.peso) : null);
 }
 function volumeSessao(s){
-  // soma kg×reps de sets marcadas ✓; se não houver sets/done, usa peso*reps legado
   let vol = 0, usouSets=false;
   (s.exercicios||[]).forEach(e=>{
     if(e.sets){
@@ -759,9 +725,149 @@ function preencherSessoesDetalhe(){
     listaSessoesDetalhe.appendChild(box);
   });
 }
+
+/* KPIs + PRs */
+function atualizarKPIs(){
+  const sess = getSessoes().sort((a,b)=>a.data.localeCompare(b.data));
+  // 7 dias
+  const d = new Date(); d.setDate(d.getDate()-7);
+  const ult7 = sess.filter(s=> new Date(s.data)>=d);
+  const vol7 = ult7.reduce((acc,s)=> acc+volumeSessao(s), 0);
+  qs('#kpi7dSessoes').textContent = new Set(ult7.map(s=>s.data)).size;
+  qs('#kpi7dVolume').textContent = vol7;
+
+  // streak (consecutivos)
+  let best=0, cur=0;
+  const setDatas = new Set(sess.map(s=>s.data));
+  const start = new Date(sess[0]?.data || todayStr());
+  const end = new Date(sess[sess.length-1]?.data || todayStr());
+  for(let dt=new Date(start); dt<=end; dt.setDate(dt.getDate()+1)){
+    const iso = dt.toISOString().slice(0,10);
+    if(setDatas.has(iso)){ cur++; best=Math.max(best,cur); } else { cur=0; }
+  }
+  qs('#kpiStreak').textContent = best;
+}
+function montarPRs(){
+  const sess = getSessoes();
+  const map = new Map(); // nome -> max kg
+  sess.forEach(s => (s.exercicios||[]).forEach(e=>{
+    const pesos = (e.sets||[]).map(z=>Number(z.peso||0));
+    const m = Math.max(e.peso?Number(e.peso):0, ...pesos);
+    if(m>0) map.set(e.nome, Math.max(map.get(e.nome)||0, m));
+  }));
+  const wrap = qs('#listaPRs'); wrap.innerHTML='';
+  [...map.entries()].sort((a,b)=> a[0].localeCompare(b[0])).forEach(([nome,kg])=>{
+    const c = document.createElement('div');
+    c.className='card-mini';
+    c.innerHTML = `<b>${nome}</b> <span class="muted">· PR:</span> <b>${kg} kg</b>`;
+    wrap.appendChild(c);
+  });
+}
 function atualizarEvolucaoUI(){
   popularListaExerciciosChart();
   desenharGrafico();
   desenharVolume();
   preencherSessoesDetalhe();
+  montarPRs();
+  atualizarKPIs();
+}
+
+/*************** PERFIL & HÁBITOS ***************/
+const HABITOS = [
+  'cafe','lanche_manha','almoco_ok','lanche_tarde','pre_treino','pos_treino',
+  'creatina','agua_25','alongar','dormir7h','acordar_hora','passos8k'
+];
+
+function getHabitosLocal(){ return JSON.parse(localStorage.getItem('habitos')||'{}'); }
+function setHabitosLocal(obj){ localStorage.setItem('habitos', JSON.stringify(obj)); }
+
+async function salvarHabitosFirestore(dataStr, dados){
+  if(!firebaseOk || !fb.user) return;
+  const { doc, setDoc } = fb._;
+  const ref = doc(fb.db, 'users', fb.user.uid, 'habitos', dataStr);
+  await setDoc(ref, dados, {merge:true});
+}
+async function carregarHabitosFirestore(dataStr){
+  if(!firebaseOk || !fb.user) return null;
+  const { doc, getDoc } = fb._;
+  const ref = doc(fb.db, 'users', fb.user.uid, 'habitos', dataStr);
+  const snap = await getDoc(ref);
+  return snap.exists()? snap.data() : null;
+}
+
+async function carregarHabitosHoje(){
+  const d = todayStr();
+  let dados = null;
+  if(firebaseOk && fb.user){
+    dados = await carregarHabitosFirestore(d);
+  }
+  if(!dados){
+    const loc = getHabitosLocal();
+    dados = loc[d] || null;
+  }
+  return dados || {};
+}
+async function salvarHabitosHoje(){
+  const d = todayStr();
+  const dados = {};
+  HABITOS.forEach(k=>{
+    const el = qs(`input[data-habit="${k}"]`);
+    dados[k] = !!(el && el.checked);
+  });
+  // local
+  const loc = getHabitosLocal(); loc[d]=dados; setHabitosLocal(loc);
+  // cloud
+  try{ await salvarHabitosFirestore(d, dados); qs('#statusHabitos').textContent='✅ Salvo'; }
+  catch(_){ qs('#statusHabitos').textContent='💾 Salvo local (offline)'; }
+  setTimeout(()=> qs('#statusHabitos').textContent='', 1500);
+  montarResumoHabitos();
+}
+qs('#btnSalvarHabitos').addEventListener('click', salvarHabitosHoje);
+
+async function atualizarPerfilUI(){
+  // foto & nome
+  const user = fb.user;
+  const photo = qs('#userPhoto');
+  const name = qs('#userName');
+  if(user){
+    name.textContent = user.displayName || user.email || 'Conectado';
+    if(user.photoURL){ photo.src = user.photoURL; } else { photo.src=''; }
+  }else{
+    name.textContent = 'Visitante';
+    photo.src = '';
+  }
+  // carregar hábitos de hoje na UI
+  const dados = await carregarHabitosHoje();
+  HABITOS.forEach(k=>{
+    const el = qs(`input[data-habit="${k}"]`);
+    if(el) el.checked = !!dados[k];
+  });
+  montarResumoHabitos();
+}
+
+function montarResumoHabitos(){
+  // Resumo semanal: % concluído por hábito (últimos 7 dias)
+  const ul = qs('#resumoHabitosSemana'); ul.innerHTML='';
+  const loc = getHabitosLocal();
+  const dias = Object.keys(loc).sort().slice(-7);
+  HABITOS.forEach(k=>{
+    const vals = dias.map(d => !!(loc[d] && loc[d][k]));
+    const pct = vals.length? Math.round(vals.filter(v=>v).length*100/vals.length) : 0;
+    const li = document.createElement('li');
+    const rotulo = qs(`label input[data-habit="${k}"]`)?.parentElement?.innerText || k;
+    li.innerHTML = `<b>${rotulo}</b>: ${pct}% nos últimos ${dias.length||0} dias`;
+    ul.appendChild(li);
+  });
+  // Histórico 7 dias: "✅ x/N hábitos"
+  const hist = qs('#historicoHabitos'); hist.innerHTML='';
+  dias.reverse().forEach(d=>{
+    const obj = loc[d] || {};
+    const total = HABITOS.length;
+    const ok = HABITOS.reduce((acc,k)=> acc + (obj[k]?1:0), 0);
+    const badge = Math.round(ok*100/total);
+    const box = document.createElement('div');
+    box.className='card-mini';
+    box.innerHTML = `<b>${d}</b> · ${ok}/${total} hábitos · <span class="muted">${badge}%</span>`;
+    hist.appendChild(box);
+  });
 }
