@@ -63,6 +63,7 @@ let firebaseOk = false;
 const qs = sel => document.querySelector(sel);
 const qsa = sel => [...document.querySelectorAll(sel)];
 
+/*************** Treinos (com Leg press) ***************/
 const TREINOS = {
   segunda: [
     {nome:'Puxada triângulo alta', alvo:'3x8–12'},
@@ -89,6 +90,7 @@ const TREINOS = {
   ],
   quinta: [
     {nome:'Hack squat', alvo:'3x8–12'},
+    {nome:'Leg press', alvo:'3x10–12'},          // ADICIONADO
     {nome:'Cadeira extensora', alvo:'3x12–15'},
     {nome:'Cadeira flexora', alvo:'3x12–15'},
     {nome:'Mesa flexora', alvo:'3x10–12'},
@@ -136,8 +138,27 @@ window.mostrarPagina = function(id){
   if(id==='home'){ atualizarResumoHome(); }
 };
 
-/*************** Local data ***************/
-function getSessoes(){ return JSON.parse(localStorage.getItem('sessoes')||'[]'); }
+/*************** Local data (com migração p/ sets) ***************/
+function getSessoes(){
+  const raw = JSON.parse(localStorage.getItem('sessoes')||'[]');
+  raw.forEach(sess=>{
+    (sess.exercicios||[]).forEach(e=>{
+      if(!e.sets){
+        const peso = e.peso ?? '';
+        const reps = e.reps ?? '';
+        e.sets = [
+          {peso, reps, done:false},
+          {peso, reps, done:false},
+          {peso, reps, done:false},
+        ];
+      }else{
+        e.sets = e.sets.map(s=>({peso:s.peso??'', reps:s.reps??'', done:!!s.done}));
+      }
+      if(typeof e.obs!=='string') e.obs = e.obs ?? '';
+    });
+  });
+  return raw;
+}
 function setSessoes(a){ localStorage.setItem('sessoes', JSON.stringify(a)); }
 
 /*************** Firestore merge ***************/
@@ -249,19 +270,40 @@ function marcarHojeNoCalendario(){
   atualizarResumoHome();
 }
 
-/*************** Timer de treino ***************/
-let timerId=null, startEpoch=null;
+/*************** Timer de treino (auto start na 1ª série) ***************/
+let timerId=null, startEpoch=Number(localStorage.getItem('sessionStart')||0);
 const timerEl = qs('#timer');
+
+function tick(){
+  if(!startEpoch) return;
+  const sec = Math.floor((Date.now()-startEpoch)/1000);
+  if(timerEl) timerEl.textContent = fmtDuracao(sec);
+}
+function startSessionIfNeeded(){
+  if(!startEpoch){
+    startEpoch = Date.now();
+    localStorage.setItem('sessionStart', String(startEpoch));
+  }
+  if(!timerId){ timerId = setInterval(tick,1000); }
+  qs('#btnTimer').textContent='Finalizar';
+}
+function stopSession(){
+  if(timerId){ clearInterval(timerId); timerId=null; }
+  startEpoch = 0;
+  localStorage.removeItem('sessionStart');
+  qs('#btnTimer').textContent='Iniciar';
+}
+tick();
+if(startEpoch) timerId=setInterval(tick,1000);
+
 qs('#btnTimer').addEventListener('click', ()=>{
-  if(timerId){
+  if(timerId){ // parar e salvar
     clearInterval(timerId); timerId=null;
     const duracao = Math.floor((Date.now()-startEpoch)/1000);
-    qs('#btnTimer').textContent='Iniciar';
+    stopSession();
     salvarSessaoAtual(duracao);
   }else{
-    startEpoch = Date.now();
-    timerId = setInterval(()=>{ timerEl.textContent = fmtDuracao(Math.floor((Date.now()-startEpoch)/1000)); }, 1000);
-    qs('#btnTimer').textContent='Finalizar';
+    startSessionIfNeeded();
   }
 });
 function fmtDuracao(sec){
@@ -295,7 +337,6 @@ function beep(times=3, freq=880, dur=200){
     t+=dur+120;
   }
 }
-
 let notifReady = false;
 async function ensureNotifyPermission(){
   if(!("Notification" in window)) return false;
@@ -322,16 +363,11 @@ const restSeg = qs('#restSeg');
 const restDisplay = qs('#restDisplay');
 const overlay = qs('#restOverlay');
 
-qs('#btnRest').addEventListener('click', async ()=>{
-  if(restId){ // parar
-    clearInterval(restId); restId=null; restDisplay.textContent='—';
-    clearInterval(beepLoop); beepLoop=null; overlay.classList.add('hidden');
-    return;
-  }
-  ensureAudioCtx();           // garante som no iOS (toque do usuário)
-  await ensureNotifyPermission(); // tenta habilitar notificação
-
-  restLeft = Math.max(10, Number(restSeg.value||60));
+function iniciarDescansoAuto(segundos){
+  if(restId){ clearInterval(restId); restId=null; }
+  ensureAudioCtx();
+  ensureNotifyPermission();
+  restLeft = Math.max(10, Number(segundos||restSeg.value||60));
   restDisplay.textContent = `${restLeft}s`;
   restId = setInterval(()=>{
     restLeft--; restDisplay.textContent = `${restLeft}s`;
@@ -342,13 +378,20 @@ qs('#btnRest').addEventListener('click', async ()=>{
       beep(3, 1100, 220);
       overlay.classList.remove('hidden');
       notify('Descanso finalizado!', 'Vamos para a próxima série.');
-      // Beep looping até confirmar
       beepLoop = setInterval(()=>{ ensureAudioCtx(); beep(1, 1200, 180); }, 1200);
-      // pisca título
       const baseTitle=document.title; let f=0;
       const blink=setInterval(()=>{ document.title = (++f%2)?'⏰ Descanso!' : baseTitle; if(f>10){clearInterval(blink); document.title=baseTitle;} },500);
     }
   },1000);
+}
+
+qs('#btnRest').addEventListener('click', async ()=>{
+  if(restId){
+    clearInterval(restId); restId=null; restDisplay.textContent='—';
+    clearInterval(beepLoop); beepLoop=null; overlay.classList.add('hidden');
+    return;
+  }
+  iniciarDescansoAuto(Number(restSeg.value||60));
 });
 qs('#btnOverlayOk').addEventListener('click', ()=>{
   overlay.classList.add('hidden');
@@ -359,7 +402,7 @@ qs('#btnOverlayBuzz').addEventListener('click', ()=>{
   ensureAudioCtx(); beep(2, 1250, 200);
 });
 
-/*************** UI Treino ***************/
+/*************** UI Treino (3 séries + descanso auto + tonelagem) ***************/
 const tabs = qsa('.tab-btn');
 const listaExEl = qs('#listaExercicios');
 const treinoDoDiaEl = qs('#treinoDoDia');
@@ -373,65 +416,146 @@ tabs.forEach(btn=>{
     montarExercicios(btn.dataset.dia, true);
   });
 });
-copyBtn.addEventListener('click', ()=>{
+copyBtn?.addEventListener('click', ()=>{
   const key = qs('.tab-btn.active')?.dataset.dia || 'segunda';
   preencherComUltima(key);
 });
+
+// cria/acha contêiner do resumo de tonelagem
+function ensureTonelagemBox(){
+  let box = qs('#tonelagemBox');
+  if(!box){
+    box = document.createElement('div');
+    box.id = 'tonelagemBox';
+    box.className = 'card';
+    box.innerHTML = `<b>Tonelagem do dia</b><div id="tonelagemLista" class="small muted">—</div>`;
+    salvarBtn?.parentElement?.insertBefore(box, salvarBtn.nextSibling);
+  }
+  return box;
+}
 
 function montarExercicios(diaKey, prefill=true){
   const arr = TREINOS[diaKey] || [];
   treinoDoDiaEl.textContent = `Dia selecionado: ${labelDia(diaKey)} · Registre as cargas e reps (meta: 8–12 reps).`;
   listaExEl.innerHTML = '';
-  const historico = getSessoes();
+
   arr.forEach(ex=>{
-    const last = prefill ? ultimaCarga(ex.nome, historico) : null;
+    const last = ultimaEntrada(ex.nome);
+    const baseSets = last?.sets?.length ? last.sets : [{peso:'',reps:''},{peso:'',reps:''},{peso:'',reps:''}];
+
     const card = document.createElement('div');
     card.className='ex-card';
     card.innerHTML = `
-      <div><b>${ex.nome}</b><br><small>${ex.alvo}</small></div>
-      <div><input type="number" step="0.5" placeholder="kg" data-field="peso" data-ex="${ex.nome}" value="${last?.peso??''}"/></div>
-      <div><input type="number" placeholder="reps" data-field="reps" data-ex="${ex.nome}" value="${last?.reps??''}"/></div>
-      <div><textarea rows="1" placeholder="obs" data-field="obs" data-ex="${ex.nome}">${last?.obs??''}</textarea></div>
+      <div class="ex-head">
+        <div><b>${ex.nome}</b><br><small>${ex.alvo}</small></div>
+      </div>
+      <div class="sets" data-ex="${ex.nome}">
+        ${[0,1,2].map(i => `
+          <div class="set" data-set="${i}">
+            <span class="tag">S${i+1}</span>
+            <input type="number" step="0.5" placeholder="kg" class="inp peso" data-ex="${ex.nome}" data-set="${i}" value="${prefill ? (baseSets[i]?.peso??'') : ''}">
+            <input type="number" placeholder="reps" class="inp reps" data-ex="${ex.nome}" data-set="${i}" value="${prefill ? (baseSets[i]?.reps??'') : ''}">
+            <button class="tick" type="button" data-ex="${ex.nome}" data-set="${i}" aria-label="Marcar série">✓</button>
+          </div>
+        `).join('')}
+      </div>
+      <div class="obs-wrap"><textarea rows="1" placeholder="obs" data-field="obs" data-ex="${ex.nome}">${prefill ? (last?.obs??'') : ''}</textarea></div>
     `;
     listaExEl.appendChild(card);
   });
+
+  // marcar série → inicia sessão + descanso automático + recalcula tonelagem
+  listaExEl.querySelectorAll('button.tick').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      startSessionIfNeeded();                   // inicia timer do treino
+      const setEl = btn.closest('.set');
+      setEl.classList.toggle('done');           // visual done
+      iniciarDescansoAuto();                    // descanso automático
+      atualizarTonelagemDoDia();                // resumo
+    });
+  });
+
+  // digitar S1 preenche S2/S3 se vazios
+  listaExEl.querySelectorAll('.set[data-set="0"] .inp').forEach(inp=>{
+    inp.addEventListener('change', ()=>{
+      const nome = inp.dataset.ex;
+      const field = inp.classList.contains('peso') ? '.peso' : '.reps';
+      const val = inp.value;
+      [1,2].forEach(i=>{
+        const tgt = listaExEl.querySelector(`.sets[data-ex="${CSS.escape(nome)}"] .set[data-set="${i}"] ${field}`);
+        if (tgt && !tgt.value) tgt.value = val;
+      });
+      atualizarTonelagemDoDia();
+    });
+  });
+
+  // qualquer digitação recalcula tonelagem
+  listaExEl.querySelectorAll('.inp').forEach(i=> i.addEventListener('input', atualizarTonelagemDoDia));
+  ensureTonelagemBox();
+  atualizarTonelagemDoDia();
 }
 function labelDia(key){
   return {segunda:'Segunda (Costas+Bíceps)', terca:'Terça (Peito+Tríceps)', quarta:'Quarta (Ombro)', quinta:'Quinta (Perna)', sexta:'Sexta (Braços+Abs)'}[key] || key;
 }
-function ultimaCarga(nomeEx, historico){
+function ultimaEntrada(nomeEx){
+  const historico = getSessoes();
   for(let i=historico.length-1;i>=0;i--){
     const e = historico[i].exercicios?.find(x=>x.nome===nomeEx);
     if(e) return e;
   }
   return null;
 }
+
 function coletarInputsExercicios(){
-  const inputs = qsa('[data-ex]');
-  const map = {};
-  inputs.forEach(el=>{
-    const nome = el.dataset.ex;
-    const field = el.dataset.field;
-    map[nome] = map[nome] || {nome};
-    map[nome][field] = el.value;
+  const map = {}; // nome -> {sets:[], obs}
+  qsa('.sets').forEach(box=>{
+    const nome = box.dataset.ex;
+    map[nome] = map[nome] || {nome, sets:[{},{},{}], obs:''};
+    box.querySelectorAll('.set').forEach(setEl=>{
+      const i = Number(setEl.dataset.set);
+      const peso = setEl.querySelector('.peso')?.value || '';
+      const reps = setEl.querySelector('.reps')?.value || '';
+      const done = setEl.classList.contains('done');
+      map[nome].sets[i] = {peso, reps, done};
+    });
+  });
+  qsa('textarea[data-field="obs"]').forEach(t=>{
+    const nome = t.dataset.ex;
+    if (map[nome]) map[nome].obs = t.value;
+  });
+  // compat: também salva "peso/reps" como a série mais pesada do dia
+  Object.values(map).forEach(e=>{
+    const pesos = e.sets.map(s=>Number(s.peso||0));
+    const maxKg = Math.max(...pesos, 0);
+    const idx = pesos.indexOf(maxKg);
+    e.peso = maxKg || '';
+    e.reps = idx>=0 ? (e.sets[idx].reps||'') : '';
   });
   return Object.values(map);
 }
+
 function preencherComUltima(diaKey){
   const arr = TREINOS[diaKey] || [];
   const hist = getSessoes();
   arr.forEach(ex=>{
-    const last = ultimaCarga(ex.nome, hist);
+    const last = hist.slice().reverse().map(s=>s.exercicios||[]).flat().find(e=>e.nome===ex.nome);
     if(last){
-      const peso = qs(`[data-ex="${CSS.escape(ex.nome)}"][data-field="peso"]`);
-      const reps = qs(`[data-ex="${CSS.escape(ex.nome)}"][data-field="reps"]`);
-      const obs  = qs(`[data-ex="${CSS.escape(ex.nome)}"][data-field="obs"]`);
-      if(peso) peso.value = last.peso ?? '';
-      if(reps) reps.value = last.reps ?? '';
-      if(obs)  obs.value  = last.obs  ?? '';
+      last.sets?.forEach((s,i)=>{
+        const p = qs(`.sets[data-ex="${CSS.escape(ex.nome)}"] .set[data-set="${i}"] .peso`);
+        const r = qs(`.sets[data-ex="${CSS.escape(ex.nome)}"] .set[data-set="${i}"] .reps`);
+        if(p) p.value = s.peso ?? '';
+        if(r) r.value = s.reps ?? '';
+        const row = qs(`.sets[data-ex="${CSS.escape(ex.nome)}"] .set[data-set="${i}"]`);
+        row?.classList.toggle('done', !!s.done);
+      });
+      const obs = qs(`textarea[data-field="obs"][data-ex="${CSS.escape(ex.nome)}"]`);
+      if(obs) obs.value = last.obs ?? '';
     }
   });
+  atualizarTonelagemDoDia();
 }
+
+// iniciar com o dia atual
 (function initTabs(){
   const d = new Date().getDay();
   let key = 'segunda'; if(d===2) key='terca'; if(d===3) key='quarta'; if(d===4) key='quinta'; if(d===5) key='sexta';
@@ -442,20 +566,57 @@ function preencherComUltima(diaKey){
 })();
 salvarBtn.addEventListener('click', ()=> salvarSessaoAtual(null));
 
-function salvarSessaoAtual(duracao){
+// Tonelagem (só séries ✓)
+function tonelagemExercicioFromUI(nome){
+  let total = 0;
+  qsa(`.sets[data-ex="${CSS.escape(nome)}"] .set`).forEach(row=>{
+    if(row.classList.contains('done')){
+      const kg = Number(row.querySelector('.peso')?.value||0);
+      const reps = Number(row.querySelector('.reps')?.value||0);
+      if(kg>0 && reps>0) total += kg*reps;
+    }
+  });
+  return total;
+}
+function atualizarTonelagemDoDia(){
+  const exs = [...new Set([...qsa('.sets')].map(s=>s.dataset.ex))];
+  let html = '';
+  let totalDia = 0;
+  exs.forEach(n=>{
+    const t = tonelagemExercicioFromUI(n);
+    if(t>0){ html += `<div>${n}: <b>${t}</b> kg·reps</div>`; totalDia += t; }
+  });
+  if(!html) html = '—';
+  ensureTonelagemBox();
+  qs('#tonelagemLista').innerHTML = html + (totalDia? `<div style="margin-top:6px"><b>Total do dia:</b> ${totalDia} kg·reps</div>`:'');
+}
+
+function salvarSessaoAtual(duracaoParam){
+  // se o timer estiver rodando e o user clicar "Salvar", calcula até agora
+  let duracaoFinal = 0;
+  if(duracaoParam!=null){
+    duracaoFinal = duracaoParam;
+  }else if(startEpoch){
+    duracaoFinal = Math.floor((Date.now()-startEpoch)/1000);
+  }
+
   const hoje = new Date();
   const dataStr = hoje.toISOString().slice(0,10);
   const diaKey = qs('.tab-btn.active')?.dataset.dia || DIAS_MAP[hoje.getDay()];
   const exercicios = coletarInputsExercicios();
-  const nova = {data:dataStr, duracao:duracao||0, dia:diaKey, exercicios};
+
+  const nova = {data:dataStr, duracao:duracaoFinal||0, dia:diaKey, exercicios};
   const sess = getSessoes().filter(s => s.data!==dataStr);
   sess.push(nova); sess.sort((a,b)=>a.data.localeCompare(b.data));
   setSessoes(sess);
   marcarHojeNoCalendario();
   qs('#statusSave').textContent = '✅ Sessão salva!';
   setTimeout(()=>qs('#statusSave').textContent='',2000);
-  desenharGrafico(); atualizarEvolucaoUI();
+  desenharGrafico(); desenharVolume(); preencherSessoesDetalhe();
   salvarNoFirestore(nova).catch(()=>{});
+
+  // após salvar, encerra sessão de tempo
+  stopSession();
 }
 
 /*************** Backup ***************/
@@ -473,13 +634,13 @@ qs('#fileImport').addEventListener('change', (e)=>{
   reader.onload = ()=>{
     try{
       const arr = JSON.parse(reader.result);
-      if(Array.isArray(arr)){ setSessoes(arr); montarCalendario(); desenharGrafico(); atualizarEvolucaoUI(); atualizarResumoHome(); alert('Importado!'); }
+      if(Array.isArray(arr)){ setSessoes(arr); montarCalendario(); desenharGrafico(); desenharVolume(); preencherSessoesDetalhe(); atualizarResumoHome(); alert('Importado!'); }
     }catch(_){ alert('Arquivo inválido'); }
   };
   reader.readAsText(file);
 });
 
-/*************** Evolução (como antes, com filtros) ***************/
+/*************** Evolução (usa sets) ***************/
 let chart, volumeChart;
 const selectEx = qs('#selectExercicio');
 const filtroDiaWrap = qs('#filtroDia');
@@ -512,12 +673,39 @@ function filtrarSessoes(){
     .filter(s => new Date(s.data) >= desde && (diaFiltro==='all' || s.dia===diaFiltro))
     .sort((a,b)=>a.data.localeCompare(b.data));
 }
+function maxPesoSessaoEx(s, nome){
+  const e = (s.exercicios||[]).find(x=>x.nome===nome);
+  if(!e) return null;
+  const pesos = (e.sets||[]).map(z=>Number(z.peso||0));
+  const m = Math.max(0, ...pesos);
+  return m>0? m : (e.peso? Number(e.peso) : null);
+}
+function volumeSessao(s){
+  // soma kg×reps de sets marcadas ✓; se não houver sets/done, usa peso*reps legado
+  let vol = 0, usouSets=false;
+  (s.exercicios||[]).forEach(e=>{
+    if(e.sets){
+      e.sets.forEach(z=>{
+        if(z.done){
+          const kg = Number(z.peso||0), reps = Number(z.reps||0);
+          if(kg>0 && reps>0){ vol += kg*reps; usouSets=true; }
+        }
+      });
+    }
+    if(!usouSets){
+      const kg = Number(e.peso||0), reps = Number(e.reps||0);
+      if(kg>0 && reps>0) vol += kg*reps;
+    }
+    usouSets=false;
+  });
+  return vol;
+}
 function desenharGrafico(){
   const nome = selectEx.value; if(!nome) return;
   const dados = [];
   filtrarSessoes().forEach(s=>{
-    const e = (s.exercicios||[]).find(x=>x.nome===nome);
-    if(e && e.peso) dados.push({data:s.data, peso:Number(e.peso)});
+    const m = maxPesoSessaoEx(s, nome);
+    if(m!=null){ dados.push({data:s.data, peso:m}); }
   });
   dados.sort((a,b)=> a.data.localeCompare(b.data));
   const ctx = qs('#chartCanvas').getContext('2d');
@@ -535,14 +723,6 @@ function isoWeek(date){
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
   const week = Math.ceil((((d - yearStart) / 86400000) + 1)/7);
   return `${d.getUTCFullYear()}-W${String(week).padStart(2,'0')}`;
-}
-function volumeSessao(s){
-  let vol = 0;
-  (s.exercicios||[]).forEach(e=>{
-    const kg = Number(e.peso||0), reps = Number(e.reps||0);
-    if(kg>0 && reps>0) vol += kg*reps;
-  });
-  return vol;
 }
 function desenharVolume(){
   const dados = new Map(); // week -> volume
@@ -568,8 +748,12 @@ function preencherSessoesDetalhe(){
     box.className='card-mini';
     const title = `${s.data} · ${labelDia(s.dia||'')} · ${fmtDuracao(s.duracao||0)} · Vol: ${volumeSessao(s)} kg·reps`;
     const lista = (s.exercicios||[]).map(e=>{
-      const kg=e.peso||'-', r=e.reps||'-'; 
-      return `<li>${e.nome}: <b>${kg}</b> kg × <b>${r}</b>${e.obs?` <span class="muted">(${e.obs})</span>`:''}</li>`;
+      if(e.sets){
+        const setsStr = e.sets.map((z,i)=>`${i+1}:${z.peso||'-'}kg×${z.reps||'-'}${z.done?'✓':''}`).join(' | ');
+        return `<li>${e.nome}: ${setsStr}${e.obs?` <span class="muted">(${e.obs})</span>`:''}</li>`;
+      }else{
+        return `<li>${e.nome}: <b>${e.peso||'-'}</b> kg × <b>${e.reps||'-'}</b>${e.obs?` <span class="muted">(${e.obs})</span>`:''}</li>`;
+      }
     }).join('');
     box.innerHTML = `<div><strong>${title}</strong><ul>${lista||'<li class="muted">sem exercícios</li>'}</ul></div>`;
     listaSessoesDetalhe.appendChild(box);
