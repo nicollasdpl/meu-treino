@@ -1,72 +1,78 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8">
+  <meta charset="utf-8" />
+  <meta name="viewport"
+        content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Meu Treino</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#8b5cf6">
-  <!-- PWA -->
-  <link rel="manifest" href="manifest.webmanifest">
-  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Meu Treino">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-
-  <link rel="stylesheet" href="style.css">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="estilo.css" />
+  <!-- iOS ícone (opcional, se já tiver): -->
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <!-- Manifest (opcional para Android/Chrome): -->
+  <link rel="manifest" href="manifest.json" />
 </head>
 <body>
-  <header>
-    <h1>Meu Treino</h1>
-    <p id="subheader"></p>
+  <!-- TELA DE LOGIN (GUARDA) -->
+  <section id="loginScreen" class="full-center hidden">
+    <div class="login-card">
+      <h1>🏋️ Meu Treino</h1>
+      <p class="muted">Entre para sincronizar seus treinos na nuvem.</p>
+      <button id="btnLoginGoogle" class="primary big">Entrar com Google</button>
+      <p id="loginError" class="error"></p>
+    </div>
+  </section>
+
+  <!-- APLICATIVO -->
+  <header id="appHeader" class="hidden">
+    <h1>🏋️ Meu Treino</h1>
+    <p id="headerToday"></p>
     <div class="header-actions">
-      <button id="btnTheme" class="small" title="Tema">🌙</button>
-      <button id="btnNotify" class="small" title="Notificações">🔕</button>
-      <button id="btnLogin" class="small">Entrar</button>
-      <button id="btnLogout" class="small" style="display:none">Sair</button>
+      <button id="btnNotify" class="small" title="Notificações">🔔</button>
+      <button id="btnTheme"  class="small" title="Tema">🌙</button>
     </div>
   </header>
 
-  <main>
-    <div class="card-mini"><span id="userStatus">Carregando…</span> · <span id="syncInfo">Sincronização: —</span></div>
-
+  <main id="appMain" class="hidden">
     <!-- HOME -->
-    <section id="home" class="pagina" style="display:block">
-      <div class="toolbar">
-        <h2>Calendário</h2>
+    <section id="home" class="pagina">
+      <div class="card status-row">
+        <span id="firebaseStatus">Firebase…</span>
+        <span> · </span>
+        <span id="syncInfo">—</span>
+        <div class="timer">
+          <button id="btnTimer" class="primary">Iniciar</button>
+          <span id="timer">00:00:00</span>
+        </div>
       </div>
-      <div class="semana-labels"><span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span></div>
-      <div class="grid-2">
-        <div class="card">
-          <div class="toolbar">
-            <button id="prevMes" class="ghost">◀</button>
-            <h2 id="mesAno" style="margin-left:6px">—</h2>
-            <button id="proxMes" class="ghost">▶</button>
-            <div class="timer" style="margin-left:auto">
-              <button id="btnTimer" class="primary">Iniciar</button>
-              <span id="timer">00:00:00</span>
-            </div>
-          </div>
-          <div id="calendario" class="grid-cal"></div>
-        </div>
-        <div class="card">
-          <h3>Resumo</h3>
-          <div class="resumo">
-            <div class="card-mini"><b id="diasTreinadosMes">0</b><div class="muted small">dias treinados no mês</div></div>
-            <div class="card-mini"><b id="ultimoTreino">—</b><div class="muted small">último treino</div></div>
-            <div class="card-mini"><b id="duracaoMedia">—</b><div class="muted small">duração média</div></div>
-          </div>
-        </div>
+
+      <h2 class="toolbar">
+        <button id="prevMes" class="ghost">◀</button>
+        <span id="mesAno">mês/ano</span>
+        <button id="proxMes" class="ghost">▶</button>
+      </h2>
+
+      <div class="semana-labels">
+        <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
+      </div>
+      <div id="calendario" class="grid-cal"></div>
+
+      <div class="resumo">
+        <div class="card"><b>Dias treinados:</b> <span id="diasTreinadosMes">0</span></div>
+        <div class="card"><b>Último treino:</b> <span id="ultimoTreino">—</span></div>
+        <div class="card"><b>Duração média:</b> <span id="duracaoMedia">—</span></div>
       </div>
     </section>
 
     <!-- TREINO -->
-    <section id="treino" class="pagina" style="display:none">
-      <div class="toolbar">
+    <section id="treino" class="pagina hidden">
+      <div id="treinoHead" class="toolbar">
         <h2>Treino</h2>
-        <div class="timer">
-          <button id="btnTimer" class="primary">Iniciar</button>
-          <span id="timer">00:00:00</span>
+        <div class="rest-controls">
+          <input id="restSeg" type="number" value="60" min="10" step="5" />
+          <button id="btnRest" class="ghost">Descanso</button>
+          <span id="restDisplay" class="muted">—</span>
         </div>
       </div>
 
@@ -78,152 +84,99 @@
         <button class="tab-btn" data-dia="sexta">Sex</button>
       </div>
 
-      <div class="card rest-controls">
-        <b>Descanso</b> ·
-        <label>segundos: <input id="restSeg" type="number" value="60"></label>
-        <button id="btnRest" class="ghost">⏱️ Iniciar</button>
-        <span id="restDisplay" class="muted">—</span>
-      </div>
-
-      <p class="hint" id="treinoDoDia">Dia selecionado: —</p>
-      <div id="listaExercicios"></div>
-
-      <div class="toolbar">
+      <p id="treinoDoDia" class="hint"></p>
+      <div class="card">
         <button id="btnCopyLast" class="ghost">Copiar última sessão</button>
-        <button id="salvarTreino" class="success">Salvar sessão</button>
         <span id="statusSave" class="muted"></span>
       </div>
-      <!-- Tonelagem do dia aparece aqui (inserido pelo JS) -->
+
+      <div id="listaExercicios"></div>
+
+      <div class="card">
+        <div id="resumoTonelagem" class="muted"></div>
+        <button id="salvarTreino" class="success">Salvar sessão</button>
+      </div>
     </section>
 
-    <!-- EVOLUÇÃO -->
-    <section id="graficos" class="pagina" style="display:none">
-      <div class="toolbar"><h2>Evolução</h2></div>
-
-      <!-- KPIs -->
-      <div class="resumo">
-        <div class="card-mini"><b id="kpi7dSessoes">0</b><div class="muted small">treinos nos últimos 7 dias</div></div>
-        <div class="card-mini"><b id="kpi7dVolume">0</b><div class="muted small">volume 7d (kg·reps)</div></div>
-        <div class="card-mini"><b id="kpiStreak">0</b><div class="muted small">maior sequência (dias)</div></div>
-      </div>
-
-      <!-- PRs -->
-      <div class="card">
-        <h3>Recordes pessoais (PR)</h3>
-        <div id="listaPRs" class="grid-2"></div>
-      </div>
-
-      <!-- Filtros -->
-      <div class="card">
-        <div class="chips" id="filtroDia">
-          <button class="chip active" data-dia="all">Todos</button>
-          <button class="chip" data-dia="segunda">Seg</button>
-          <button class="chip" data-dia="terca">Ter</button>
-          <button class="chip" data-dia="quarta">Qua</button>
-          <button class="chip" data-dia="quinta">Qui</button>
-          <button class="chip" data-dia="sexta">Sex</button>
+    <!-- EVOLUÇÃO (simplificada) -->
+    <section id="graficos" class="pagina hidden">
+      <h2>Evolução</h2>
+      <div class="card grid-2">
+        <div>
+          <label class="small">Exercício</label>
+          <select id="selectExercicio"></select>
         </div>
-        <div class="toolbar">
-          <label>Período:
-            <select id="periodo">
-              <option value="30">30 dias</option>
-              <option value="60">60 dias</option>
-              <option value="90" selected>90 dias</option>
-              <option value="180">180 dias</option>
-              <option value="365">1 ano</option>
-            </select>
-          </label>
-          <label style="margin-left:auto">Exercício:
-            <select id="selectExercicio"></select>
-          </label>
-        </div>
-        <div class="card">
-          <canvas id="chartCanvas" height="220"></canvas>
-        </div>
-        <div class="card">
-          <canvas id="volumeCanvas" height="220"></canvas>
+        <div>
+          <label class="small">Período</label>
+          <select id="periodo">
+            <option value="30">30 dias</option>
+            <option value="60">60 dias</option>
+            <option value="90" selected>90 dias</option>
+            <option value="180">180 dias</option>
+          </select>
         </div>
       </div>
 
       <div class="card">
-        <h3>Sessões recentes</h3>
+        <canvas id="chartCanvas" height="160"></canvas>
+      </div>
+
+      <div class="card">
+        <canvas id="volumeCanvas" height="160"></canvas>
+      </div>
+
+      <div class="card">
+        <h3>Últimas sessões</h3>
         <div id="listaSessoesDetalhe"></div>
       </div>
     </section>
 
-    <!-- PERFIL / HÁBITOS -->
-    <section id="perfil" class="pagina" style="display:none">
-      <div class="toolbar"><h2>Perfil & Rotina</h2></div>
+    <!-- PERFIL -->
+    <section id="perfil" class="pagina hidden">
+      <h2>Perfil</h2>
 
-      <div class="card profile-card">
-        <img id="userPhoto" alt="Foto" src="" />
+      <div class="card profile">
+        <img id="fotoPerfil" class="avatar" alt="foto" />
         <div>
-          <div><b id="userName">Visitante</b></div>
-          <div class="muted small">Entre com Google para sincronizar foto, nome e seus dados.</div>
+          <div id="nomePerfil" class="strong">—</div>
+          <div id="emailPerfil" class="muted small">—</div>
         </div>
+        <button id="btnLogout" class="ghost" style="margin-left:auto">Sair</button>
       </div>
 
       <div class="card">
-        <h3>Hábitos do dia</h3>
-        <div class="habits-grid" id="habitsGrid">
-          <!-- checkboxes (JS preenche estado) -->
-          <label><input type="checkbox" data-habit="cafe"> Café da manhã</label>
-          <label><input type="checkbox" data-habit="lanche_manha"> Lanche da manhã</label>
-          <label><input type="checkbox" data-habit="almoco_ok"> Almoço “limpo”</label>
-          <label><input type="checkbox" data-habit="lanche_tarde"> Lanche da tarde</label>
-          <label><input type="checkbox" data-habit="pre_treino"> Pré-treino</label>
-          <label><input type="checkbox" data-habit="pos_treino"> Pós-treino</label>
-          <label><input type="checkbox" data-habit="creatina"> Creatina</label>
-          <label><input type="checkbox" data-habit="agua_25"> Água (≥ 2,5 L)</label>
-          <label><input type="checkbox" data-habit="alongar"> Alongar</label>
-          <label><input type="checkbox" data-habit="dormir7h"> Dormir ≥ 7h</label>
-          <label><input type="checkbox" data-habit="acordar_hora"> Acordar no horário</label>
-          <label><input type="checkbox" data-habit="passos8k"> Passos ≥ 8k</label>
+        <h3>Hábitos de hoje</h3>
+        <div id="habitos" class="habits">
+          <!-- criado via JS -->
         </div>
-        <div class="toolbar">
-          <button id="btnSalvarHabitos" class="success">Salvar hábitos de hoje</button>
-          <span id="statusHabitos" class="muted"></span>
-        </div>
-      </div>
-
-      <div class="grid-2">
-        <div class="card">
-          <h3>Resumo da semana</h3>
-          <ul id="resumoHabitosSemana" class="small" style="margin:0;padding-left:18px"></ul>
-        </div>
-        <div class="card">
-          <h3>Histórico (7 dias)</h3>
-          <div id="historicoHabitos" class="card-mini"></div>
-        </div>
+        <div class="muted small">Marcado = concluído (salva automaticamente).</div>
       </div>
     </section>
   </main>
 
   <!-- NAV -->
-  <nav>
-    <button onclick="mostrarPagina('home')">🏠</button>
-    <button onclick="mostrarPagina('treino')">🏋️</button>
-    <button onclick="mostrarPagina('graficos')">📈</button>
-    <button onclick="mostrarPagina('perfil')">👤</button>
+  <nav id="appNav" class="hidden">
+    <button data-go="home">🏠</button>
+    <button data-go="perfil">👤</button>
+    <button data-go="treino">💪</button>
+    <button data-go="graficos">📊</button>
   </nav>
 
-  <!-- OVERLAY descanso -->
+  <!-- Overlay descanso -->
   <div id="restOverlay" class="overlay hidden">
     <div class="modal">
       <h3>⏰ Descanso finalizado!</h3>
-      <p class="muted">Hora da próxima série.</p>
+      <p>Pronto para a próxima série.</p>
       <div class="stack">
-        <button id="btnOverlayOk" class="success">Beleza</button>
-        <button id="btnOverlayBuzz" class="ghost">🔔 Tocar / Vibrar</button>
+        <button id="btnOverlayOk" class="primary">OK</button>
+        <button id="btnOverlayBuzz" class="ghost">Vibrar/Beep de novo</button>
       </div>
     </div>
   </div>
 
-  <script type="module" src="script.js"></script>
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js').catch(console.error);
-    }
-  </script>
+  <!-- libs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <!-- app -->
+  <script type="module" src="app.js"></script>
 </body>
 </html>
