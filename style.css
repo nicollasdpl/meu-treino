@@ -11,7 +11,7 @@
   --shadow:0 10px 30px rgba(0,0,0,.35);
 }
 
-/* ===== Reset & base ===== */
+/* Base */
 *{box-sizing:border-box}
 html,body{
   margin:0;padding:0;
@@ -22,14 +22,17 @@ html,body{
 }
 html{-webkit-text-size-adjust:100%}
 img{max-width:100%;display:block}
-
 .hidden{display:none !important}
 .muted{color:var(--muted)}
 .small{font-size:12px}
 .strong{font-weight:700}
 .error{color:var(--danger);margin-top:10px}
 
-/* ===== Header ===== */
+/* Login */
+.full-center{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+.login-card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;width:min(92vw,420px);box-shadow:var(--shadow);text-align:center}
+
+/* Header */
 header{
   position:sticky;top:0;z-index:50;
   background:var(--primary);color:#fff;
@@ -44,18 +47,13 @@ header .small{
   color:#fff;border:1px solid rgba(255,255,255,.25)
 }
 
-/* ===== Main + páginas ===== */
-main{
-  padding:16px;
-  padding-bottom:calc(110px + env(safe-area-inset-bottom,0px));
-  max-width:900px;margin:0 auto;
-}
+/* Main */
+main{padding:16px; padding-bottom:calc(110px + env(safe-area-inset-bottom,0px)); max-width:900px;margin:0 auto}
 .pagina{display:none}
-#home.pagina{display:block} /* página inicial padrão */
-
+#home.pagina{display:block}
 .hint{margin:8px 0 6px;color:var(--muted)}
 
-/* ===== Botões e chips ===== */
+/* Botões / chips */
 .ghost,.primary,.success,nav button,.chip{
   border:1px solid var(--border);background:var(--card);color:var(--text);
   padding:10px 14px;border-radius:12px;cursor:pointer;font-size:16px
@@ -67,66 +65,44 @@ main{
 .chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
 .chip.active{background:var(--chip);border-color:transparent;color:var(--chip-text)}
 
-/* ===== Cartões ===== */
-.card,.card-mini{
-  background:var(--card);border:1px solid var(--border);
-  border-radius:14px;padding:12px;margin:12px 0; box-shadow:var(--shadow)
-}
+/* Cards */
+.card,.card-mini{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px;margin:12px 0;box-shadow:var(--shadow)}
 .card-mini{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 
-/* ===== Grids ===== */
+/* Grids */
 .grid-2{display:grid;gap:12px;grid-template-columns:1fr 1fr}
 @media (max-width:800px){.grid-2{grid-template-columns:1fr}}
 
-/* ===== Calendário ===== */
-.semana-labels{
-  display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:10px;color:var(--muted)
-}
+/* Calendário */
+.semana-labels{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:10px;color:var(--muted)}
 .grid-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin:8px 0 12px}
-.dia{
-  padding:12px 0;border-radius:12px;text-align:center;
-  border:1px solid var(--border);background:var(--card);font-size:15px;
-  user-select:none
-}
+.dia{padding:12px 0;border-radius:12px;text-align:center;border:1px solid var(--border);background:var(--card);font-size:15px;user-select:none}
 .dia.hoje{outline:2px solid var(--primary)}
 .dia.treino{background:var(--chip);color:var(--chip-text);border-color:transparent}
 .dia.nao-treino{opacity:.6}
 .dia.fora{visibility:hidden}
 
-/* ===== Resumo ===== */
+/* Resumo */
 .resumo{display:grid;gap:10px;grid-template-columns:repeat(3,1fr)}
 @media (max-width:800px){.resumo{grid-template-columns:1fr}}
 
-/* ===== Tabs (Treinos) ===== */
+/* Tabs / treino */
 .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px}
 .tab-btn{padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card)}
 .tab-btn.active{background:var(--chip);color:var(--chip-text);border-color:transparent}
 
-/* ===== Timer principal ===== */
+/* Timer */
 .timer{display:flex;gap:10px;align-items:center;margin-left:auto}
 .timer #timer{font-weight:700}
 
-/* ===== Exercícios (cartões + sets 3x) ===== */
+/* Exercícios */
 .ex-card{
   display:grid;grid-template-columns:1.3fr repeat(3,1fr);gap:10px;align-items:center;
   border:1px solid var(--border);border-radius:12px;padding:12px;margin:10px 0;background:var(--card)
 }
-.ex-card input,.ex-card textarea{
-  width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;
-  background:transparent;color:var(--text);font-size:16px; /* 16px evita zoom no iPhone */
-}
-.sets{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.set{
-  border:1px dashed var(--border);border-radius:10px;padding:8px;background:color-mix(in oklab, var(--card) 94%, transparent)
-}
-.set .top{display:flex;align-items:center;gap:8px;margin-bottom:6px}
-.set input{
-  width:100%;padding:8px;border:1px solid var(--border);
-  border-radius:8px;background:transparent;color:var(--text);font-size:16px
-}
-.set .done{transform:scale(1.15)}
+.ex-card input,.ex-card textarea{width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--text);font-size:16px}
 
-/* ===== Navegação inferior (fixa) ===== */
+/* Nav inferior fixa */
 nav{
   position:fixed;left:0;right:0;bottom:0;z-index:40;
   display:grid;grid-template-columns:repeat(4,1fr);gap:10px;
@@ -136,48 +112,27 @@ nav{
   backdrop-filter:saturate(180%) blur(10px);
   box-shadow:var(--shadow)
 }
-nav button{
-  font-size:22px; padding:16px 0; border-radius:16px;
-  display:flex; align-items:center; justify-content:center
-}
+nav button{font-size:22px;padding:16px 0;border-radius:16px;display:flex;align-items:center;justify-content:center}
 
-/* ===== Descanso (overlay/modal) ===== */
-.overlay{
-  position:fixed;inset:0;background:rgba(0,0,0,.55);
-  display:flex;align-items:center;justify-content:center;z-index:1000
-}
+/* Descanso */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:1000}
 .overlay.hidden{display:none}
-.modal{
-  background:var(--bg);color:var(--text);border:1px solid var(--border);
-  border-radius:18px;padding:20px;max-width:360px;width:90%;text-align:center;
-  box-shadow:var(--shadow)
-}
+.modal{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:18px;padding:20px;max-width:360px;width:90%;text-align:center;box-shadow:var(--shadow)}
 .stack{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
 .rest-controls input{width:88px}
 
-/* ===== Gráficos (canvas responsivo) ===== */
+/* Gráficos */
 .chart-wrap{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px}
 canvas{max-width:100%}
 
-/* ===== Perfil / checklist ===== */
-.profile{
-  display:grid;gap:14px;
-}
-.checklist{
-  display:grid;gap:8px;
-}
-.checklist .item{
-  display:flex;align-items:center;gap:10px;
-  background:var(--card);border:1px solid var(--border);border-radius:12px;
-  padding:10px;
-}
+/* Perfil / hábitos */
+.profile{display:grid;gap:14px;grid-template-columns:auto 1fr auto;align-items:center}
+.profile .avatar{width:56px;height:56px;border-radius:50%;object-fit:cover;border:2px solid var(--border)}
+.checklist{display:grid;gap:8px}
+.checklist .item{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px}
 .checklist input{width:20px;height:20px}
 
-/* ===== Inputs gerais ===== */
+/* Inputs gerais */
 input,textarea,select,button{font:inherit}
-
-/* ===== Links ===== */
 a{color:inherit;text-decoration:underline dotted}
-
-/* ===== Acessibilidade de toque ===== */
 button{touch-action:manipulation}
