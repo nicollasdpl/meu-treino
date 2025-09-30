@@ -6,17 +6,15 @@
         content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
   <title>Meu Treino</title>
-  <link rel="stylesheet" href="estilo.css" />
-  <!-- iOS ícone (opcional, se já tiver): -->
+
+  <link rel="stylesheet" href="style.css" />
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
-  <!-- Manifest (opcional para Android/Chrome): -->
   <link rel="manifest" href="manifest.json" />
 </head>
 <body>
-  <!-- TELA DE LOGIN (GUARDA) -->
-  <section id="loginScreen" class="full-center hidden">
+  <!-- TELA DE LOGIN -->
+  <section id="loginScreen" class="full-center">
     <div class="login-card">
       <h1>🏋️ Meu Treino</h1>
       <p class="muted">Entre para sincronizar seus treinos na nuvem.</p>
@@ -25,7 +23,7 @@
     </div>
   </section>
 
-  <!-- APLICATIVO -->
+  <!-- APP -->
   <header id="appHeader" class="hidden">
     <h1>🏋️ Meu Treino</h1>
     <p id="headerToday"></p>
@@ -99,7 +97,7 @@
       </div>
     </section>
 
-    <!-- EVOLUÇÃO (simplificada) -->
+    <!-- EVOLUÇÃO -->
     <section id="graficos" class="pagina hidden">
       <h2>Evolução</h2>
       <div class="card grid-2">
@@ -147,9 +145,7 @@
 
       <div class="card">
         <h3>Hábitos de hoje</h3>
-        <div id="habitos" class="habits">
-          <!-- criado via JS -->
-        </div>
+        <div id="habitos" class="checklist"></div>
         <div class="muted small">Marcado = concluído (salva automaticamente).</div>
       </div>
     </section>
@@ -179,6 +175,11 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <!-- app -->
   <script type="module" src="app.js"></script>
+  <script>
+    // Registro do Service Worker (PWA)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js');
+    }
+  </script>
 </body>
 </html>
-
