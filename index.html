@@ -2,8 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport"
-        content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Meu Treino</title>
@@ -12,18 +11,7 @@
   <link rel="manifest" href="manifest.json" />
 </head>
 <body>
-  <!-- LOGIN -->
-  <section id="loginScreen" class="full-center">
-    <div class="login-card">
-      <h1>🏋️ Meu Treino</h1>
-      <p class="muted">Entre com o Google para sincronizar na nuvem.</p>
-      <button id="btnLoginGoogle" class="primary big">Entrar com Google</button>
-      <p id="loginError" class="error"></p>
-    </div>
-  </section>
-
-  <!-- APP -->
-  <header id="appHeader" class="hidden">
+  <header>
     <h1>🏋️ Meu Treino</h1>
     <p id="headerToday"></p>
     <div class="header-actions">
@@ -32,11 +20,11 @@
     </div>
   </header>
 
-  <main id="appMain" class="hidden">
+  <main>
     <!-- HOME -->
     <section id="home" class="pagina">
       <div class="card status-row">
-        <span id="firebaseStatus">Conectando…</span>
+        <span id="firebaseStatus">Modo local</span>
         <span> · </span>
         <span id="syncInfo">—</span>
         <div class="timer">
@@ -100,7 +88,6 @@
     <!-- EVOLUÇÃO -->
     <section id="graficos" class="pagina hidden">
       <h2>Evolução</h2>
-
       <div class="card grid-2">
         <div>
           <label class="small">Exercício</label>
@@ -116,10 +103,8 @@
           </select>
         </div>
       </div>
-
       <div class="card"><canvas id="chartCanvas" height="160"></canvas></div>
       <div class="card"><canvas id="volumeCanvas" height="160"></canvas></div>
-
       <div class="card">
         <h3>Últimas sessões</h3>
         <div id="listaSessoesDetalhe"></div>
@@ -133,29 +118,30 @@
       <div class="card profile">
         <img id="fotoPerfil" class="avatar" alt="foto" />
         <div>
-          <div id="nomePerfil" class="strong">—</div>
+          <div id="nomePerfil" class="strong">Convidado</div>
           <div id="emailPerfil" class="muted small">—</div>
         </div>
-        <button id="btnLogout" class="ghost" style="margin-left:auto">Sair</button>
+        <div class="stack">
+          <button id="btnLoginGoogle" class="primary">Entrar Google</button>
+          <button id="btnLogout" class="ghost hidden">Sair</button>
+        </div>
       </div>
 
       <div class="card">
         <h3>Hábitos de hoje</h3>
         <div id="habitos" class="checklist"></div>
-        <div class="muted small">Marcado = concluído (salva na nuvem automaticamente).</div>
+        <div class="muted small">Marcado = concluído (salva automaticamente).</div>
       </div>
     </section>
   </main>
 
-  <!-- NAV -->
-  <nav id="appNav" class="hidden">
+  <nav>
     <button data-go="home">🏠</button>
     <button data-go="perfil">👤</button>
     <button data-go="treino">💪</button>
     <button data-go="graficos">📊</button>
   </nav>
 
-  <!-- Overlay descanso -->
   <div id="restOverlay" class="overlay hidden">
     <div class="modal">
       <h3>⏰ Descanso finalizado!</h3>
@@ -167,9 +153,7 @@
     </div>
   </div>
 
-  <!-- libs -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-  <!-- app -->
   <script type="module" src="app.js"></script>
 </body>
 </html>
