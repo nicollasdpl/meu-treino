@@ -1,15 +1,16 @@
 // Service Worker for Meu Treino 2.0
 // Update cache name to force old caches to be purged when new version is deployed.
-const CACHE_NAME = 'mt-v20251104-1500';
+// Bump the cache name to force old caches to be purged when deploying a new version.
+const CACHE_NAME = 'mt-v20251104-1600';
 // List of assets to precache. Each entry should include a version query
 // matching the one used in index.html so that updated files are fetched.
 const ASSETS = [
   '/',
   '/index.html',
-  '/style.css?v=2025110415',
-  '/app.js?v=2025110415',
-  '/charts.js?v=2025110415',
-  '/firebase.js?v=2025110415',
+  '/style.css?v=2025110416',
+  '/app.js?v=2025110416',
+  '/charts.js?v=2025110416',
+  '/firebase.js?v=2025110416',
   '/manifest.json',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
@@ -18,10 +19,9 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', event => {
+  // Precache all static assets and activate immediately.
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(ASSETS);
-    })
+    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting())
   );
 });
 
@@ -31,7 +31,7 @@ self.addEventListener('activate', event => {
       if (key !== CACHE_NAME) {
         return caches.delete(key);
       }
-    })))
+    }))).then(() => self.clients.claim())
   );
 });
 

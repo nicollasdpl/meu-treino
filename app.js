@@ -4,7 +4,7 @@
 // the service worker may serve a stale version of firebase.js which can
 // cause ENABLE_FIREBASE flag to be out of sync. The version number should
 // match the one used in index.html and sw.js.
-import { ENABLE_FIREBASE, loginWithGoogle, logout, onAuthChange, getCurrentUser, pullSessions, pushSession, pullHabits, pushHabits, uploadPhoto } from './firebase.js?v=2025110415';
+import { ENABLE_FIREBASE, loginWithGoogle, logout, onAuthChange, getCurrentUser, pullSessions, pushSession, pullHabits, pushHabits, uploadPhoto } from './firebase.js?v=2025110416';
 import { computeMaxLoadData, compute1RMData, computeWeeklyVolumeData, computeTopExercises, drawLineChart, drawBarChart } from './charts.js';
 
 // Dexie DB initialization
@@ -125,28 +125,25 @@ async function init() {
   habArray.forEach(h => { state.habits[h.data] = h; });
   // Auth handling
   if (ENABLE_FIREBASE) {
-    // Show login until user logs in
-    document.getElementById('app').classList.add('hidden');
-    document.getElementById('login-screen').classList.remove('hidden');
-    document.getElementById('btnLogin').addEventListener('click', async () => {
-      await loginWithGoogle();
-    });
+    // When Firebase sync is enabled we still listen for auth changes to merge remote data,
+    // but we no longer block the UI behind a login screen. Users can log in from the Perfil
+    // page to sync their data; until then the app operates fully offline.
     onAuthChange(async (u) => {
       if (u) {
-        document.getElementById('login-screen').classList.add('hidden');
-        document.getElementById('app').classList.remove('hidden');
-        // Pull remote data and merge
+        // Pull remote sessions and merge
         const remoteSessions = await pullSessions(u.uid);
-        // merge sessions by date: keep one with more sets
         for (const [date, sess] of Object.entries(remoteSessions)) {
           const local = await db.sessoes.get(date);
-          if (!local || (sess.exercicios.flatMap(e=>e.sets.filter(s=>s.done)).length > local.exercicios.flatMap(e=>e.sets.filter(s=>s.done)).length)) {
+          const remoteCount = sess.exercicios.flatMap(e => e.sets.filter(s => s.done)).length;
+          const localCount = local ? local.exercicios.flatMap(e => e.sets.filter(s => s.done)).length : 0;
+          if (!local || remoteCount > localCount) {
             await db.sessoes.put({ data: date, ...sess });
           } else {
             await pushSession(u.uid, date, local);
           }
         }
         state.sessions = await db.sessoes.toArray();
+        // Pull remote habits and merge
         const remoteHab = await pullHabits(u.uid);
         for (const [date, h] of Object.entries(remoteHab)) {
           const local = state.habits[date];
@@ -160,16 +157,11 @@ async function init() {
         state.habits = {};
         habArray2.forEach(h => { state.habits[h.data] = h; });
         renderHome();
-      } else {
-        // show login-screen
-        document.getElementById('login-screen').classList.remove('hidden');
-        document.getElementById('app').classList.add('hidden');
       }
     });
-  } else {
-    document.getElementById('login-screen').classList.add('hidden');
-    document.getElementById('app').classList.remove('hidden');
   }
+  // Always show the main app (login overlay has been removed)
+  document.getElementById('app').classList.remove('hidden');
   // Navigation
   setupNavigation();
   // Render home by default
