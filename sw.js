@@ -1,11 +1,12 @@
-const CACHE_NAME = 'meu-treino-static-v1';
-const STATIC_ASSETS = [
+// Service Worker for Meu Treino 2.0
+const CACHE_NAME = 'mt-v20251104-1200';
+const ASSETS = [
   '/',
   '/index.html',
-  '/style.css',
-  '/app.js',
-  '/charts.js',
-  '/firebase.js',
+  '/style.css?v=2025110411',
+  '/app.js?v=2025110411',
+  '/charts.js?v=2025110411',
+  '/firebase.js?v=2025110411',
   '/manifest.json',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
@@ -13,33 +14,46 @@ const STATIC_ASSETS = [
   '/assets/beep.mp3'
 ];
 
-self.addEventListener('install', evt => {
-  evt.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache => {
+      return cache.addAll(ASSETS);
+    })
   );
 });
 
-self.addEventListener('activate', evt => {
-  evt.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
-      .then(() => self.clients.claim())
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys().then(keys => Promise.all(keys.map(key => {
+      if (key !== CACHE_NAME) {
+        return caches.delete(key);
+      }
+    })))
   );
 });
 
-self.addEventListener('fetch', evt => {
-  if (evt.request.method !== 'GET') return;
-  const url = new URL(evt.request.url);
-  if (url.origin === location.origin) {
-    // cache-first for same-origin
-    evt.respondWith(
-      caches.match(evt.request).then(cached => {
-        return cached || fetch(evt.request).catch(() => caches.match('/index.html'));
-      })
+// Use cache-first for static assets, network-first for others (e.g. Firebase)
+self.addEventListener('fetch', event => {
+  const req = event.request;
+  const url = new URL(req.url);
+  // Navigate requests fallback to index.html
+  if (req.mode === 'navigate') {
+    event.respondWith(
+      fetch(req).catch(() => caches.match('/index.html'))
     );
-  } else {
-    // network-first for cross-origin
-    evt.respondWith(
-      fetch(evt.request).catch(() => caches.match(evt.request))
-    );
+    return;
   }
+  // Cache-first for assets
+  if (ASSETS.includes(url.pathname)) {
+    event.respondWith(
+      caches.match(req).then(res => res || fetch(req))
+    );
+    return;
+  }
+  // Network-first for other requests
+  event.respondWith(
+    fetch(req).then(res => {
+      return res;
+    }).catch(() => caches.match(req))
+  );
 });
