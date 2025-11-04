@@ -286,3 +286,20 @@ main {
 .hidden {
   display: none !important;
 }
+
+/*
+ * Fallback styles to ensure the app remains accessible even if an older
+ * version of index.html (with a login overlay) is cached by the
+ * service worker. These rules hide the login overlay and force the
+ * main app to be visible, so the user is never blocked from using
+ * the application offline.
+ */
+#login-screen {
+  display: none !important;
+}
+
+/* When the app element has the .hidden class (from older markup),
+   override it so the app is still shown. */
+#app.hidden {
+  display: block !important;
+}

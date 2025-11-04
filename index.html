@@ -12,14 +12,14 @@
   <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png" />
   <link rel="manifest" href="manifest.json" />
   <!-- Use version query parameters to bust caches. Update the timestamp when files change -->
-  <link rel="stylesheet" href="style.css?v=2025110416" />
+  <link rel="stylesheet" href="style.css?v=2025110417" />
   <!-- External libs -->
   <script src="https://cdn.jsdelivr.net/npm/dexie@3.2.2/dist/dexie.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
   <!-- App scripts -->
-  <script defer src="firebase.js?v=2025110416"></script>
-  <script defer src="charts.js?v=2025110416"></script>
-  <script defer src="app.js?v=2025110416"></script>
+  <script defer src="firebase.js?v=2025110417"></script>
+  <script defer src="charts.js?v=2025110417"></script>
+  <script defer src="app.js?v=2025110417"></script>
   <title>Meu Treino 2.0</title>
 </head>
 <body>
@@ -73,7 +73,7 @@
     // Register the service worker
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=2025110416').catch(() => {});
+        navigator.serviceWorker.register('sw.js?v=2025110417').catch(() => {});
       });
     }
   </script>
