@@ -12,20 +12,25 @@
   <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png" />
   <link rel="manifest" href="manifest.json" />
   <!-- Use version query parameters to bust caches. Update the timestamp when files change -->
-  <link rel="stylesheet" href="style.css?v=2025110417" />
+  <link rel="stylesheet" href="style.css?v=2025110420" />
   <!-- External libs -->
   <script src="https://cdn.jsdelivr.net/npm/dexie@3.2.2/dist/dexie.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.js"></script>
   <!-- App scripts -->
-  <script defer src="firebase.js?v=2025110417"></script>
-  <script defer src="charts.js?v=2025110417"></script>
-  <script defer src="app.js?v=2025110417"></script>
+  <script defer src="firebase.js?v=2025110420"></script>
+  <script defer src="charts.js?v=2025110420"></script>
+  <script defer src="app.js?v=2025110420"></script>
   <title>Meu Treino 2.0</title>
 </head>
 <body>
-  <!-- Login overlay removed. The app now always loads directly without forcing
-       a login screen. Users can still authenticate from the Perfil page if
-       Firebase syncing is enabled. -->
+  <!-- Login overlay (starts hidden; will be shown only if Firebase syncing is enabled and user is not logged in) -->
+  <div id="login-screen" class="pagina hidden">
+    <div class="login-container">
+      <h1>Meu Treino 2.0</h1>
+      <p>Faça login com Google para continuar</p>
+      <button id="btnLogin" class="btn">Entrar com Google</button>
+    </div>
+  </div>
   <!-- Main App -->
   <div id="app" class="hidden">
     <header id="app-header">
@@ -73,7 +78,7 @@
     // Register the service worker
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js?v=2025110417').catch(() => {});
+        navigator.serviceWorker.register('sw.js?v=2025110420').catch(() => {});
       });
     }
   </script>
