@@ -2,14 +2,30 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <!--
+    Este projeto é uma versão refatorada do "Meu Treino" com foco em
+    manter o fluxo 100% offline e permitir sincronização opcional via
+    Firebase. A interface foi inspirada no aplicativo Hevy, trazendo
+    acompanhamento de séries, descanso automático, progresso visual e
+    hábitos diários. As dependências foram reduzidas ao mínimo: apenas
+    Chart.js é carregado via CDN e todo o restante roda em HTML/CSS/JS
+    puro para máxima compatibilidade e facilidade de publicação no
+    GitHub Pages.
+  -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
   <title>Meu Treino</title>
-  <link rel="stylesheet" href="style.css"/>
+  <link rel="stylesheet" href="style.css" />
+  <!-- PWA manifest e ícones -->
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png" />
+  <!-- Chart.js para os gráficos de evolução -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
   <header>
-    <h1>🏋️ Meu Treino</h1>
+    <h1>🏋️ Meu Treino</h1>
     <p id="subheader"></p>
     <div class="header-actions">
       <button id="btnNotify" class="ghost small" title="Ativar alertas">🔔</button>
@@ -25,50 +41,22 @@
         <h2 id="mesAno"></h2>
         <button id="proxMes" class="ghost">&rarr;</button>
       </div>
-
       <div class="semana-labels">
         <span>Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span>Sáb</span>
       </div>
       <div id="calendario" class="grid-cal"></div>
-
       <div class="resumo">
         <div class="card-mini"><strong>Dias treinados:</strong> <span id="diasTreinadosMes">0</span></div>
         <div class="card-mini"><strong>Último treino:</strong> <span id="ultimoTreino">—</span></div>
         <div class="card-mini"><strong>Duração média:</strong> <span id="duracaoMedia">—</span></div>
+        <div class="card-mini"><strong>Streak:</strong> <span id="treinoStreak">0</span></div>
       </div>
-    </section>
-
-    <!-- PERFIL -->
-    <section id="perfil" class="pagina" style="display:none">
-      <h2>👤 Perfil & Sincronização</h2>
-
       <div class="card">
-        <p><b>Status:</b> <span id="userStatus" class="muted">Inicializando…</span></p>
-        <p><b>Sincronização:</b> <span id="syncInfo" class="muted">—</span></p>
-        <div class="stack">
-          <button id="btnLogin" class="primary">Entrar com Google</button>
-          <button id="btnLogout" class="ghost" style="display:none">Sair</button>
-        </div>
-      </div>
-
-      <div class="card grid-2">
-        <div>
-          <h3>Backup manual</h3>
-          <div class="stack">
-            <button id="btnExport" class="ghost">Exportar JSON</button>
-            <input type="file" id="fileImport" accept="application/json" style="display:none"/>
-            <button id="btnImport" class="ghost">Importar JSON</button>
-          </div>
-          <small class="muted">Mesmo com nuvem, exporte às vezes como backup extra.</small>
-        </div>
-        <div>
-          <h3>Sobre</h3>
-          <p>Treino, calendário, evolução e sincronização automática com Firebase (quando logado).</p>
-        </div>
+        <button id="btnStartTreino" class="primary">Começar treino do dia</button>
       </div>
     </section>
 
-    <!-- TREINO -->
+    <!-- TREINO / LOG -->
     <section id="treino" class="pagina" style="display:none">
       <div class="toolbar">
         <h2>💪 Treino</h2>
@@ -77,67 +65,80 @@
           <button id="btnTimer" class="primary">Iniciar</button>
         </div>
       </div>
-
       <div class="rest-controls card-mini">
-        <label>Descanso (seg): <input id="restSeg" type="number" min="10" step="5" value="60"></label>
+        <label>Descanso (seg): <input id="restSeg" type="number" min="10" step="5" value="60" /></label>
         <button id="btnRest" class="ghost">Iniciar descanso</button>
         <span id="restDisplay" class="muted">—</span>
-        <button id="btnCopyLast" class="ghost" title="Copiar última sessão registrada para este dia">Copiar última sessão</button>
+        <button id="btnCopyLast" class="ghost" title="Copiar última sessão para este exercício">Copiar última sessão</button>
       </div>
-
-      <div class="tabs">
-        <button class="tab-btn active" data-dia="segunda">Seg (Costas+Bíceps)</button>
+      <div class="tabs" id="diasTabs">
+        <button class="tab-btn" data-dia="segunda">Seg (Costas+Bíceps)</button>
         <button class="tab-btn" data-dia="terca">Ter (Peito+Tríceps)</button>
         <button class="tab-btn" data-dia="quarta">Qua (Ombro)</button>
         <button class="tab-btn" data-dia="quinta">Qui (Perna)</button>
         <button class="tab-btn" data-dia="sexta">Sex (Braços+Abs)</button>
       </div>
-
       <div id="treinoDoDia" class="hint"></div>
       <div id="listaExercicios"></div>
-
       <div class="actions">
         <button id="salvarTreino" class="success">Salvar sessão</button>
         <span id="statusSave" class="muted"></span>
       </div>
     </section>
 
-    <!-- GRÁFICOS / EVOLUÇÃO -->
+    <!-- EVOLUÇÃO / GRÁFICOS -->
     <section id="graficos" class="pagina" style="display:none">
       <h2>📊 Evolução</h2>
-
       <div class="card grid-2">
         <div>
-          <label for="selectExercicio"><b>Exercício:</b></label>
+          <label><b>Exercício:</b></label>
           <select id="selectExercicio"></select>
         </div>
         <div>
-          <label for="periodo"><b>Período:</b></label>
+          <label><b>Período:</b></label>
           <select id="periodo">
             <option value="30">últimos 30 dias</option>
+            <option value="60">últimos 60 dias</option>
             <option value="90" selected>últimos 90 dias</option>
             <option value="180">últimos 180 dias</option>
           </select>
         </div>
       </div>
-
-      <div class="chips" id="filtroDia">
-        <button class="chip active" data-dia="all">Todos</button>
-        <button class="chip" data-dia="segunda">Seg</button>
-        <button class="chip" data-dia="terca">Ter</button>
-        <button class="chip" data-dia="quarta">Qua</button>
-        <button class="chip" data-dia="quinta">Qui</button>
-        <button class="chip" data-dia="sexta">Sex</button>
+      <div class="tabs-type">
+        <button class="chart-type active" data-type="max">Carga Máx.</button>
+        <button class="chart-type" data-type="1rm">1RM Est.</button>
+        <button class="chart-type" data-type="volume">Volume</button>
+        <button class="chart-type" data-type="prs">PRs</button>
       </div>
+      <div id="chartArea">
+        <canvas id="mainChart" height="160"></canvas>
+        <div id="prList" style="display:none"></div>
+      </div>
+    </section>
 
-      <canvas id="chartCanvas" height="160"></canvas>
-
-      <h3>📦 Volume semanal</h3>
-      <canvas id="volumeCanvas" height="140"></canvas>
-
+    <!-- PERFIL / HÁBITOS -->
+    <section id="perfil" class="pagina" style="display:none">
+      <h2>👤 Perfil</h2>
+      <div class="card grid-2">
+        <div>
+          <p><b>Status:</b> <span id="userStatus" class="muted">Inicializando…</span></p>
+          <p><b>Sincronização:</b> <span id="syncInfo" class="muted">—</span></p>
+          <div class="stack">
+            <button id="btnLogin" class="primary">Entrar com Google</button>
+            <button id="btnLogout" class="ghost" style="display:none">Sair</button>
+          </div>
+        </div>
+        <div>
+          <h3>Sobre</h3>
+          <p>Treino, calendário, evolução e hábitos funcionam 100% offline. Ao entrar, seus dados são sincronizados com o Firebase.</p>
+        </div>
+      </div>
       <div class="card">
-        <h3>🗂️ Sessões detalhadas (recentes)</h3>
-        <div id="listaSessoesDetalhe"></div>
+        <h3>Hábitos diários</h3>
+        <div id="habitsList" class="habits-list"></div>
+      </div>
+      <div class="card">
+        <button id="btnExport" class="ghost small">Exportar JSON</button>
       </div>
     </section>
   </main>
@@ -147,7 +148,7 @@
       <button onclick="mostrarPagina('home')" title="Home">🏠</button>
       <button onclick="mostrarPagina('perfil')" title="Perfil">👤</button>
       <button onclick="mostrarPagina('treino')" title="Treino">💪</button>
-      <button onclick="mostrarPagina('graficos')" title="Gráficos">📊</button>
+      <button onclick="mostrarPagina('graficos')" title="Evolução">📊</button>
     </nav>
   </footer>
 
@@ -163,7 +164,7 @@
     </div>
   </div>
 
-  <!-- Firebase + app -->
-  <script type="module" src="script.js"></script>
+  <!-- Scripts principais -->
+  <script type="module" src="app.js"></script>
 </body>
 </html>
