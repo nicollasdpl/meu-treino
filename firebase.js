@@ -6,7 +6,10 @@
 // When true the app requires Google login and syncs with Firestore/Storage.
 // Set to false to run completely offline.  Updated to true by default so
 // that the login button works.
-export const ENABLE_FIREBASE = true;
+// Change this flag to true only when you want to enable synchronization with
+// Firebase. When false, the app runs completely offline without requiring
+// Google login. Users can still log in from the Perfil page to sync data.
+export const ENABLE_FIREBASE = false;
 
 // Firebase config provided by the user
 const firebaseConfig = {
