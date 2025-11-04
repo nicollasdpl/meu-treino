@@ -1,957 +1,683 @@
-/*
-  Arquivo principal do aplicativo "Meu Treino".
+// app.js – lógica principal do Meu Treino 2.0
 
-  Este script coordena toda a interface, persistência local, lógica
-  de progressão e comunicação com o módulo de gráficos e com o
-  Firebase (quando habilitado). A intenção é que todo o fluxo
-  continue funcionando 100% offline; a nuvem apenas sincroniza
-  alterações quando o usuário opta por fazer login.
-*/
+import { ENABLE_FIREBASE, loginWithGoogle, logout, onAuthChange, getCurrentUser, pullSessions, pushSession, pullHabits, pushHabits, uploadPhoto } from './firebase.js';
+import { computeMaxLoadData, compute1RMData, computeWeeklyVolumeData, computeTopExercises, drawLineChart, drawBarChart } from './charts.js';
 
-import { enableFirebase, initFirebase, loginWithGoogle, logout, pullAllSessionsAndMerge, pushSession, setHabit, firebaseOk, fb } from './firebase.js';
-import { computeMaxLoadData, compute1RMData, computeWeeklyVolumeData, computePRs, drawLineChart, drawBarChart } from './charts.js';
+// Dexie DB initialization
+const db = new Dexie('meuTreinoDB');
+db.version(1).stores({
+  sessoes: 'data',      // chave primária: data YYYY-MM-DD
+  habitos: 'data',      // chave primária: data
+  fotos: '++id,data'    // fotos salvas localmente (metadados)
+});
 
-/* === Utilitários de consulta de elementos === */
-const qs = sel => document.querySelector(sel);
-const qsa = sel => [...document.querySelectorAll(sel)];
-
-/* === Configuração dos treinos (split do usuário) === */
-// Cada entrada representa o plano de treino para um dia específico.
-const TREINOS = {
+// Exercícios por dia de treino (split fixo). Você pode ajustar os nomes conforme sua planilha.
+const SPLIT = {
   segunda: [
-    { nome:'Puxada triângulo alta', alvo:'3×8–12' },
-    { nome:'Puxada barra reta alta', alvo:'3×8–12' },
-    { nome:'Remada máquina', alvo:'3×8–12' },
-    { nome:'Rosca direta barra', alvo:'3×8–12' },
-    { nome:'Martelo', alvo:'3×10–12' },
-    { nome:'Banco Scott', alvo:'3×8–12' },
-    { nome:'Lombar máquina', alvo:'3×15–20' }
+    'Puxada triângulo alta',
+    'Puxada barra reta alta',
+    'Remada baixa',
+    'Rosca direta',
+    'Rosca martelo'
   ],
   terca: [
-    { nome:'Supino máquina vertical', alvo:'3×8–12' },
-    { nome:'Supino reto com halteres', alvo:'3×8–12' },
-    { nome:'Crucifixo reto com halteres', alvo:'3×10–12' },
-    { nome:'Supino declinado convergente', alvo:'3×8–12' },
-    { nome:'Tríceps francês', alvo:'3×10–12' },
-    { nome:'Tríceps polia barra reta', alvo:'3×12–15' }
+    'Supino máquina',
+    'Peck deck',
+    'Tríceps corda',
+    'Tríceps pulley'
   ],
   quarta: [
-    { nome:'Desenvolvimento máquina', alvo:'3×8–12' },
-    { nome:'Elevação lateral', alvo:'3×12–15' },
-    { nome:'Crucifixo inverso / Face pull', alvo:'3×12–15' },
-    { nome:'Encolhimento trapézio', alvo:'3×12–15' }
+    'Desenvolvimento ombro',
+    'Elevação lateral',
+    'Elevação frontal',
+    'Face pull'
   ],
   quinta: [
-    { nome:'Hack squat', alvo:'3×8–12' },
-    { nome:'Leg press', alvo:'3×10–12' },
-    { nome:'Cadeira extensora', alvo:'3×12–15' },
-    { nome:'Cadeira flexora', alvo:'3×12–15' },
-    { nome:'Mesa flexora', alvo:'3×10–12' },
-    { nome:'Panturrilha banco', alvo:'3×15–20' }
+    'Agachamento',
+    'Leg press',
+    'Cadeira extensora',
+    'Cadeira flexora'
   ],
   sexta: [
-    { nome:'Rosca direta barra', alvo:'3×8–12' },
-    { nome:'Martelo', alvo:'3×10–12' },
-    { nome:'Tríceps francês', alvo:'3×10–12' },
-    { nome:'Tríceps polia barra reta', alvo:'3×12–15' },
-    { nome:'Abdômen (prancha, infra, polia)', alvo:'3 séries' }
+    'Rosca alternada',
+    'Tríceps francês',
+    'Abdominal infra',
+    'Prancha'
   ]
 };
-// Mapeamento de número do dia da semana (Date.getDay()) para chave da rotina
-const DIAS_MAP = { 0:'domingo', 1:'segunda', 2:'terca', 3:'quarta', 4:'quinta', 5:'sexta', 6:'sabado' };
 
-// Conjunto de exercícios de perna para progressão de carga diferenciada
-const EXERCICIOS_PERNA = [
-  'Hack squat','Leg press','Cadeira extensora','Cadeira flexora','Mesa flexora','Panturrilha banco','Agachamento','Stiff','Cadeira adutora','Cadeira abdutora'
-];
-
-/* === Persistência local de sessões === */
-function getSessions(){
-  const raw = JSON.parse(localStorage.getItem('sessoes') || '[]');
-  // migra estrutura antiga: cria sets e campos faltantes
-  raw.forEach(sess => {
-    (sess.exercicios || []).forEach((e, idx) => {
-      // garantir propriedade ordem
-      e.ordem = e.ordem ?? (idx + 1);
-      if(!Array.isArray(e.sets)){
-        const peso = e.peso ?? '';
-        const reps = e.reps ?? '';
-        e.sets = [
-          { n:1, peso, reps, rir:'', done:false, ts:null },
-          { n:2, peso, reps, rir:'', done:false, ts:null },
-          { n:3, peso, reps, rir:'', done:false, ts:null }
-        ];
-      } else {
-        e.sets = e.sets.map((s,i) => {
-          return {
-            n: s.n ?? (i + 1),
-            peso: s.peso ?? '',
-            reps: s.reps ?? '',
-            rir: s.rir ?? '',
-            done: !!s.done,
-            ts: s.ts ?? null
-          };
-        });
-      }
-      if(typeof e.obs !== 'string') e.obs = e.obs ?? '';
-    });
-    // propriedade volume pode não existir; será recalculada ao salvar
-    sess.volume = sess.volume ?? 0;
-    sess.prHits = sess.prHits ?? [];
-  });
-  return raw.sort((a,b) => a.data.localeCompare(b.data));
-}
-function setSessions(arr){
-  localStorage.setItem('sessoes', JSON.stringify(arr));
-}
-
-/* === Persistência local de hábitos === */
-function getHabits(){
-  return JSON.parse(localStorage.getItem('habitos') || '{}');
-}
-function setHabits(obj){
-  localStorage.setItem('habitos', JSON.stringify(obj));
-}
-function updateHabit(dateStr, key, val){
-  const habits = getHabits();
-  if(!habits[dateStr]) habits[dateStr] = {};
-  habits[dateStr][key] = val;
-  setHabits(habits);
-  // sincronizar com Firebase, se disponível
-  if(enableFirebase) setHabit(dateStr, key, val).catch(() => {});
-}
-function computeHabitStreak(key){
-  const habits = getHabits();
-  let count = 0;
-  const date = new Date();
-  while(true){
-    const iso = date.toISOString().slice(0,10);
-    if(habits[iso] && habits[iso][key]){
-      count++;
-      date.setDate(date.getDate() - 1);
-    }else{
-      break;
-    }
-  }
-  return count;
-}
-
-/* === Tema Claro/Escuro === */
-(function initTheme(){
-  const saved = localStorage.getItem('theme') || 'dark';
-  if(saved === 'dark'){ document.documentElement.classList.add('dark'); }
-  qs('#btnTheme').textContent = document.documentElement.classList.contains('dark') ? '☀️' : '🌙';
-})();
-qs('#btnTheme').addEventListener('click', () => {
-  document.documentElement.classList.toggle('dark');
-  const dark = document.documentElement.classList.contains('dark');
-  localStorage.setItem('theme', dark ? 'dark' : 'light');
-  qs('#btnTheme').textContent = dark ? '☀️' : '🌙';
-});
-
-/* === Notificações === */
-let notifReady = false;
-async function ensureNotifyPermission(){
-  if(!('Notification' in window)) return false;
-  if(Notification.permission === 'granted'){ notifReady = true; return true; }
-  if(Notification.permission !== 'denied'){
-    const p = await Notification.requestPermission();
-    notifReady = (p === 'granted');
-    return notifReady;
-  }
-  return false;
-}
-function notify(title, body){
-  if(notifReady){
-    try{ new Notification(title, { body }); }catch(_){}
-  }
-}
-qs('#btnNotify').addEventListener('click', async () => {
-  const ok = await ensureNotifyPermission();
-  qs('#btnNotify').textContent = ok ? '🔔' : '🔕';
-});
-
-/* === Audio/Vibração para descanso === */
-let audioCtx = null;
-function ensureAudioCtx(){
-  if(!audioCtx){
-    const AC = window.AudioContext || window.webkitAudioContext;
-    audioCtx = AC ? new AC() : null;
-  }
-  if(audioCtx?.state === 'suspended'){ audioCtx.resume?.(); }
-}
-function beep(times = 3, freq = 880, dur = 200){
-  if(!audioCtx) return;
-  let t = 0;
-  for(let i=0;i<times;i++){
-    setTimeout(() => {
-      const o = audioCtx.createOscillator();
-      const g = audioCtx.createGain();
-      o.frequency.value = freq; o.type = 'sine';
-      o.connect(g); g.connect(audioCtx.destination);
-      g.gain.setValueAtTime(0.001, audioCtx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.4, audioCtx.currentTime + 0.01);
-      o.start(); setTimeout(() => { o.stop(); }, dur);
-    }, t);
-    t += dur + 120;
-  }
-}
-
-/* === Timer principal de treino === */
-let timerId = null;
-let startEpoch = Number(localStorage.getItem('sessionStart') || 0);
-const timerEl = qs('#timer');
-function tick(){
-  if(!startEpoch) return;
-  const sec = Math.floor((Date.now() - startEpoch) / 1000);
-  if(timerEl) timerEl.textContent = fmtDuracao(sec);
-}
-function startSessionIfNeeded(){
-  if(!startEpoch){
-    startEpoch = Date.now();
-    localStorage.setItem('sessionStart', String(startEpoch));
-  }
-  if(!timerId){ timerId = setInterval(tick, 1000); }
-  qs('#btnTimer').textContent = 'Finalizar';
-}
-function stopSession(){
-  if(timerId){ clearInterval(timerId); timerId = null; }
-  startEpoch = 0;
-  localStorage.removeItem('sessionStart');
-  qs('#btnTimer').textContent = 'Iniciar';
-  if(timerEl) timerEl.textContent = '00:00:00';
-}
-tick();
-if(startEpoch) timerId = setInterval(tick, 1000);
-qs('#btnTimer').addEventListener('click', () => {
-  if(timerId){
-    // finalizar sessão e salvar duração
-    clearInterval(timerId); timerId = null;
-    const duracao = Math.floor((Date.now() - startEpoch) / 1000);
-    stopSession();
-    salvarSessaoAtual(duracao);
-  }else{
-    startSessionIfNeeded();
-  }
-});
-
-/* === Descanso automático === */
-let restId = null;
-let restLeft = 0;
-let beepLoop = null;
-const restSeg = qs('#restSeg');
-const restDisplay = qs('#restDisplay');
-const overlay = qs('#restOverlay');
-function iniciarDescansoAuto(segundos){
-  if(restId){ clearInterval(restId); restId = null; }
-  ensureAudioCtx();
-  ensureNotifyPermission();
-  restLeft = Math.max(10, Number(segundos || restSeg.value || 60));
-  restDisplay.textContent = `${restLeft}s`;
-  restId = setInterval(() => {
-    restLeft--; restDisplay.textContent = `${restLeft}s`;
-    if(restLeft <= 0){
-      clearInterval(restId); restId = null;
-      restDisplay.textContent = '⏰ Descanso finalizado!';
-      try{ navigator.vibrate && navigator.vibrate([250,120,250,120,400]); }catch(_){}
-      beep(3, 1100, 220);
-      overlay.classList.remove('hidden');
-      notify('Descanso finalizado!', 'Vamos para a próxima série.');
-      beepLoop = setInterval(() => { ensureAudioCtx(); beep(1, 1200, 180); }, 1200);
-      const baseTitle = document.title; let f = 0;
-      const blink = setInterval(() => { document.title = (++f % 2) ? '⏰ Descanso!' : baseTitle; if(f > 10){ clearInterval(blink); document.title = baseTitle; } }, 500);
-    }
-  }, 1000);
-}
-qs('#btnRest').addEventListener('click', () => {
-  if(restId){
-    clearInterval(restId); restId = null; restDisplay.textContent = '—';
-    clearInterval(beepLoop); beepLoop = null; overlay.classList.add('hidden');
-    return;
-  }
-  iniciarDescansoAuto(Number(restSeg.value || 60));
-});
-qs('#btnOverlayOk').addEventListener('click', () => {
-  overlay.classList.add('hidden'); clearInterval(beepLoop); beepLoop = null;
-});
-qs('#btnOverlayBuzz').addEventListener('click', () => {
-  try{ navigator.vibrate && navigator.vibrate([200,100,300]); }catch(_){}
-  ensureAudioCtx(); beep(2, 1250, 200);
-});
-
-/* === Calendário e resumo === */
-let viewAno, viewMes;
-const mesLabel = qs('#mesAno');
-const calEl = qs('#calendario');
-qs('#prevMes').addEventListener('click', () => {
-  viewMes--; if(viewMes < 0){ viewMes = 11; viewAno--; }
-  montarCalendario();
-});
-qs('#proxMes').addEventListener('click', () => {
-  viewMes++; if(viewMes > 11){ viewMes = 0; viewAno++; }
-  montarCalendario();
-});
-(function initCalendar(){
-  const hoje = new Date();
-  viewAno = hoje.getFullYear();
-  viewMes = hoje.getMonth();
-  montarCalendario();
-})();
-function montarCalendario(){
-  mesLabel.textContent = new Date(viewAno, viewMes).toLocaleString('pt-BR', { month:'long', year:'numeric' });
-  calEl.innerHTML = '';
-  const first = new Date(viewAno, viewMes, 1);
-  const lastDay = new Date(viewAno, viewMes + 1, 0).getDate();
-  const offset = first.getDay();
-  for(let i=0;i<offset;i++){
-    const d = document.createElement('div'); d.className = 'dia fora'; calEl.appendChild(d);
-  }
-  const hoje = new Date();
-  const setDatas = new Set(getSessions().map(s => s.data));
-  for(let dia=1; dia<=lastDay; dia++){
-    const d = document.createElement('div');
-    d.className = 'dia'; d.dataset.dia = String(dia).padStart(2, '0');
-    d.textContent = dia;
-    const dataStr = `${viewAno}-${String(viewMes+1).padStart(2,'0')}-${String(dia).padStart(2,'0')}`;
-    if(setDatas.has(dataStr)) d.classList.add('treino'); else d.classList.add('nao-treino');
-    if(dia === hoje.getDate() && viewMes === hoje.getMonth() && viewAno === hoje.getFullYear()) d.classList.add('hoje');
-    // clique para alternar marcação manual
-    d.addEventListener('click', () => {
-      const sess = getSessions();
-      if(d.classList.contains('treino')){
-        d.classList.remove('treino'); d.classList.add('nao-treino');
-        setSessions(sess.filter(s => s.data !== dataStr));
-      }else{
-        d.classList.remove('nao-treino'); d.classList.add('treino');
-        // cria sessão vazia (sem exercícios) apenas para marcar no calendário
-        if(!sess.find(s => s.data === dataStr)){
-          sess.push({ data:dataStr, duracao:0, splitDia:null, exercicios:[], volume:0, prHits:[] });
-          setSessions(sess);
-        }
-      }
-      atualizarResumoHome();
-    });
-    calEl.appendChild(d);
-  }
-  atualizarResumoHome();
-}
-
-function atualizarResumoHome(){
-  const sess = getSessions().filter(s => {
-    const dt = new Date(s.data);
-    return dt.getFullYear() === viewAno && dt.getMonth() === viewMes;
-  });
-  qs('#diasTreinadosMes').textContent = new Set(sess.map(s => s.data)).size;
-  const ult = getSessions().slice(-1)[0];
-  qs('#ultimoTreino').textContent = ult ? `${ult.data} (${fmtDuracao(ult.duracao||0)})` : '—';
-  const dur = getSessions().map(s => s.duracao || 0);
-  const media = dur.length ? Math.round(dur.reduce((a,b) => a+b, 0) / dur.length) : 0;
-  qs('#duracaoMedia').textContent = dur.length ? fmtDuracao(media) : '—';
-  // calcular streak de treinos (dias consecutivos com sessões)
-  const today = new Date();
-  let streak = 0;
-  while(true){
-    const str = today.toISOString().slice(0,10);
-    if(getSessions().find(s => s.data === str)){
-      streak++;
-      today.setDate(today.getDate() - 1);
-    }else{
-      break;
-    }
-  }
-  qs('#treinoStreak').textContent = streak;
-}
-
-/* === Navegação entre páginas === */
-window.mostrarPagina = function(id){
-  qsa('.pagina').forEach(p => p.style.display = 'none');
-  const el = qs('#'+id);
-  if(el) el.style.display = 'block';
-  if(id === 'graficos'){ atualizarEvolucaoUI(); }
-  if(id === 'home'){ atualizarResumoHome(); }
-  if(id === 'perfil'){ atualizarPerfilUI(); }
-  // persistir escolha de página? não necessário
+// Global state
+let state = {
+  sessions: [],
+  habits: {},
+  selectedDate: null,
+  dark: false
 };
 
-/* === Inicio rápido do treino a partir da home === */
-qs('#btnStartTreino').addEventListener('click', () => {
-  // Seleciona automaticamente o tab do dia atual
-  const hoje = new Date();
-  const diaKey = DIAS_MAP[hoje.getDay()] || 'segunda';
-  const tab = [...qsa('#diasTabs .tab-btn')].find(b => b.dataset.dia === diaKey);
-  if(tab){
-    qsa('#diasTabs .tab-btn').forEach(b => b.classList.remove('active'));
-    tab.classList.add('active');
-    montarExercicios(diaKey);
-  }
-  mostrarPagina('treino');
-});
-
-/* === Construção da interface de treino (exercícios e séries) === */
-const listaExEl = qs('#listaExercicios');
-const treinoDoDiaEl = qs('#treinoDoDia');
-const salvarBtn = qs('#salvarTreino');
-const copyBtn = qs('#btnCopyLast');
-
-// Tabs para seleção de dia da divisão
-qsa('#diasTabs .tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    qsa('#diasTabs .tab-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    montarExercicios(btn.dataset.dia);
-  });
-});
-copyBtn.addEventListener('click', () => {
-  const key = qs('#diasTabs .tab-btn.active')?.dataset.dia || 'segunda';
-  preencherComUltima(key);
-});
-
-/** Cria/acha contêiner do resumo de tonelagem (kg×reps do dia). */
-function ensureTonelagemBox(){
-  let box = qs('#tonelagemBox');
-  if(!box){
-    box = document.createElement('div');
-    box.id = 'tonelagemBox';
-    box.className = 'card';
-    box.innerHTML = `<b>Tonelagem do dia</b><div id="tonelagemLista" class="small muted">—</div>`;
-    salvarBtn?.parentElement?.insertBefore(box, salvarBtn.nextSibling);
-  }
-  return box;
+// Helpers
+function formatDate(date) {
+  const d = new Date(date);
+  return d.toISOString().split('T')[0];
 }
 
-/** Monta os cartões de exercícios para o dia selecionado. */
-function montarExercicios(diaKey){
-  const arr = TREINOS[diaKey] || [];
-  treinoDoDiaEl.textContent = `Dia selecionado: ${labelDia(diaKey)} · Registre as cargas, reps e RIR.`;
-  listaExEl.innerHTML = '';
-  // pré-computar PRs para cada exercício
-  const historico = getSessions();
-  const prsMap = {};
-  arr.forEach(ex => {
-    prsMap[ex.nome] = computePRs(historico, ex.nome, 180); // últimos 6 meses para referência
+function getDayName(date) {
+  const dias = ['domingo','segunda','terça','quarta','quinta','sexta','sábado'];
+  return dias[new Date(date).getDay()];
+}
+
+// Migration from localStorage (antigo) to Dexie
+async function migrateOldData() {
+  const old = localStorage.getItem('sessoes');
+  if (!old) return;
+  try {
+    const parsed = JSON.parse(old);
+    for (const sess of parsed) {
+      const dataKey = sess.data || sess.date;
+      const exercicios = sess.exercicios || [];
+      // Convert planos antigos {nome, peso, reps} para sets
+      const newExs = exercicios.map(ex => {
+        if (ex.sets) return ex;
+        const sets = [];
+        if (ex.peso || ex.reps) {
+          sets.push({ peso: ex.peso || 0, reps: ex.reps || 0, rir: null, done: true });
+          // adicionar séries vazias
+          sets.push({ peso: 0, reps: 0, rir: null, done: false });
+          sets.push({ peso: 0, reps: 0, rir: null, done: false });
+        }
+        return { nome: ex.nome, sets: sets, obs: ex.obs || '' };
+      });
+      await db.sessoes.put({ data: dataKey, duracao: sess.duracao || 0, dia: sess.dia, exercicios: newExs });
+    }
+    localStorage.removeItem('sessoes');
+  } catch (e) {
+    console.error('Falha ao migrar dados antigos', e);
+  }
+}
+
+// Initialize app
+async function init() {
+  // Theme preference
+  if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+    document.documentElement.classList.add('dark');
+    state.dark = true;
+  }
+  // Toggle theme
+  document.getElementById('btnTheme').addEventListener('click', () => {
+    state.dark = !state.dark;
+    document.documentElement.classList.toggle('dark', state.dark);
   });
-  arr.forEach(ex => {
-    // última entrada para prefill
-    const last = ultimaEntrada(ex.nome);
-    // base sets: clone das últimas sets ou padrão vazio
-    const baseSets = last?.sets?.length ? last.sets : [ {peso:'', reps:'', rir:'', done:false}, {peso:'', reps:'', rir:'', done:false}, {peso:'', reps:'', rir:'', done:false} ];
+  // Notification permission
+  document.getElementById('btnNotif').addEventListener('click', () => {
+    if (Notification && Notification.permission !== 'granted') {
+      Notification.requestPermission();
+    }
+  });
+  // Migrate old data if exists
+  await migrateOldData();
+  // Load sessions and habits from IndexedDB
+  state.sessions = await db.sessoes.toArray();
+  const habArray = await db.habitos.toArray();
+  state.habits = {};
+  habArray.forEach(h => { state.habits[h.data] = h; });
+  // Auth handling
+  if (ENABLE_FIREBASE) {
+    // Show login until user logs in
+    document.getElementById('app').classList.add('hidden');
+    document.getElementById('login-screen').classList.remove('hidden');
+    document.getElementById('btnLogin').addEventListener('click', async () => {
+      await loginWithGoogle();
+    });
+    onAuthChange(async (u) => {
+      if (u) {
+        document.getElementById('login-screen').classList.add('hidden');
+        document.getElementById('app').classList.remove('hidden');
+        // Pull remote data and merge
+        const remoteSessions = await pullSessions(u.uid);
+        // merge sessions by date: keep one with more sets
+        for (const [date, sess] of Object.entries(remoteSessions)) {
+          const local = await db.sessoes.get(date);
+          if (!local || (sess.exercicios.flatMap(e=>e.sets.filter(s=>s.done)).length > local.exercicios.flatMap(e=>e.sets.filter(s=>s.done)).length)) {
+            await db.sessoes.put({ data: date, ...sess });
+          } else {
+            await pushSession(u.uid, date, local);
+          }
+        }
+        state.sessions = await db.sessoes.toArray();
+        const remoteHab = await pullHabits(u.uid);
+        for (const [date, h] of Object.entries(remoteHab)) {
+          const local = state.habits[date];
+          if (!local) {
+            await db.habitos.put({ data: date, ...h });
+          } else {
+            await pushHabits(u.uid, date, local);
+          }
+        }
+        const habArray2 = await db.habitos.toArray();
+        state.habits = {};
+        habArray2.forEach(h => { state.habits[h.data] = h; });
+        renderHome();
+      } else {
+        // show login-screen
+        document.getElementById('login-screen').classList.remove('hidden');
+        document.getElementById('app').classList.add('hidden');
+      }
+    });
+  } else {
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+  }
+  // Navigation
+  setupNavigation();
+  // Render home by default
+  renderHome();
+}
+
+/**
+ * Setup bottom navigation handlers
+ */
+function setupNavigation() {
+  document.getElementById('navHome').addEventListener('click', () => showPage('home'));
+  document.getElementById('navTreino').addEventListener('click', () => showPage('treino'));
+  document.getElementById('navEvolucao').addEventListener('click', () => showPage('evolucao'));
+  document.getElementById('navPerfil').addEventListener('click', () => showPage('perfil'));
+  // Start today training from home
+  document.getElementById('btnStartToday').addEventListener('click', () => {
+    const today = formatDate(new Date());
+    state.selectedDate = today;
+    showPage('treino');
+    renderTreino(today);
+  });
+}
+
+function showPage(pageId) {
+  document.querySelectorAll('.pagina').forEach(p => p.classList.remove('active'));
+  const el = document.getElementById(pageId);
+  if (el) el.classList.add('active');
+  if (pageId === 'home') renderHome();
+  if (pageId === 'treino') {
+    if (!state.selectedDate) {
+      state.selectedDate = formatDate(new Date());
+    }
+    renderTreino(state.selectedDate);
+  }
+  if (pageId === 'evolucao') renderEvolucao();
+  if (pageId === 'perfil') renderPerfil();
+}
+
+/**
+ * Render the calendar and monthly summary.
+ */
+function renderHome() {
+  showPage('home');
+  const calTitle = document.getElementById('calTitle');
+  const calContainer = document.getElementById('calendario');
+  const now = state.selectedDate ? new Date(state.selectedDate) : new Date();
+  const month = now.getMonth();
+  const year = now.getFullYear();
+  calTitle.textContent = now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  // compute first day
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  // Build grid
+  calContainer.innerHTML = '';
+  // Add blank days
+  for (let i = 0; i < firstDay; i++) {
+    const btn = document.createElement('button');
+    btn.disabled = true;
+    calContainer.appendChild(btn);
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dateStr = formatDate(new Date(year, month, d));
+    const btn = document.createElement('button');
+    btn.textContent = d;
+    // mark if session exists
+    if (state.sessions.some(s => s.data === dateStr)) {
+      btn.classList.add('marked');
+    }
+    btn.addEventListener('click', () => {
+      state.selectedDate = dateStr;
+      renderTreino(dateStr);
+      showPage('treino');
+    });
+    calContainer.appendChild(btn);
+  }
+  // Summary of month
+  const monthStr = `${year}-${String(month+1).padStart(2,'0')}`;
+  const sessionsThisMonth = state.sessions.filter(s => s.data.startsWith(monthStr));
+  document.getElementById('diasTreinados').textContent = sessionsThisMonth.length;
+  if (sessionsThisMonth.length > 0) {
+    const last = sessionsThisMonth[sessionsThisMonth.length - 1];
+    document.getElementById('ultimoTreino').textContent = last.data;
+    const avgDur = (sessionsThisMonth.reduce((acc, s) => acc + (s.duracao || 0), 0) / sessionsThisMonth.length).toFixed(0);
+    document.getElementById('duracaoMedia').textContent = avgDur + ' min';
+  } else {
+    document.getElementById('ultimoTreino').textContent = '—';
+    document.getElementById('duracaoMedia').textContent = '—';
+  }
+  // Streak: consecutive days with sessions from last date backward
+  let streak = 0;
+  let current = new Date();
+  while (true) {
+    const dateKey = formatDate(current);
+    if (state.sessions.some(s => s.data === dateKey)) {
+      streak++;
+      current.setDate(current.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+  document.getElementById('streakCount').textContent = streak;
+  // navigation for month
+  document.getElementById('calPrev').onclick = () => {
+    const prev = new Date(year, month - 1, 1);
+    state.selectedDate = formatDate(prev);
+    renderHome();
+  };
+  document.getElementById('calNext').onclick = () => {
+    const next = new Date(year, month + 1, 1);
+    state.selectedDate = formatDate(next);
+    renderHome();
+  };
+}
+
+/**
+ * Render treino page for a specific date.
+ */
+async function renderTreino(dateStr) {
+  const el = document.getElementById('treino');
+  el.innerHTML = '';
+  const dayName = getDayName(dateStr);
+  const splitKey = dayName.toLowerCase();
+  const exercises = SPLIT[splitKey] || [];
+  // Title and top controls
+  const title = document.createElement('h2');
+  title.textContent = `Treino do dia (${dateStr})`;
+  el.appendChild(title);
+  // Button copy last session
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'btn';
+  copyBtn.textContent = 'Copiar última sessão';
+  el.appendChild(copyBtn);
+  // Listener to copy previous session of same exercise
+  copyBtn.onclick = () => {
+    exercises.forEach(exName => {
+      const lastSess = findLastSessionForExercise(exName, dateStr);
+      if (lastSess) {
+        const card = document.querySelector(`.card[data-name="${exName}"]`);
+        if (card) {
+          lastSess.sets.forEach((set, idx) => {
+            const pesoInput = card.querySelector(`input[data-field="peso"][data-set="${idx}"]`);
+            const repsInput = card.querySelector(`input[data-field="reps"][data-set="${idx}"]`);
+            if (pesoInput) pesoInput.value = set.peso || '';
+            if (repsInput) repsInput.value = set.reps || '';
+          });
+        }
+      }
+    });
+    updateTonnage();
+  };
+  // Generate cards for each exercise
+  exercises.forEach(exName => {
     const card = document.createElement('div');
-    card.className = 'ex-card';
-    // sugestão de próximo peso
-    const sug = sugerirProximoPeso(ex.nome);
-    card.innerHTML = `
-      <div class="ex-head">
-        <div><b>${ex.nome}</b><br><small>${ex.alvo}</small></div>
-        <div class="muted next-peso">Próximo: ${sug ? sug : '-'} kg</div>
-      </div>
-      <div class="sets" data-ex="${ex.nome}">
-        ${[0,1,2].map(i => `
-          <div class="set" data-set="${i}">
-            <span class="tag">S${i+1}</span>
-            <input type="number" step="0.5" placeholder="kg" class="inp peso" data-ex="${ex.nome}" data-set="${i}" value="${baseSets[i]?.peso ?? ''}" />
-            <input type="number" placeholder="reps" class="inp reps" data-ex="${ex.nome}" data-set="${i}" value="${baseSets[i]?.reps ?? ''}" />
-            <input type="number" placeholder="RIR" class="inp rir" data-ex="${ex.nome}" data-set="${i}" value="${baseSets[i]?.rir ?? ''}" />
-            <button class="tick" type="button" data-ex="${ex.nome}" data-set="${i}" aria-label="Marcar série">✓</button>
-          </div>
-        `).join('')}
-      </div>
-      <button class="add-set small ghost" type="button" data-ex="${ex.nome}">+ Série</button>
-      <div class="obs-wrap"><textarea rows="1" placeholder="obs" data-field="obs" data-ex="${ex.nome}">${last?.obs ?? ''}</textarea></div>
-    `;
-    listaExEl.appendChild(card);
+    card.className = 'card';
+    card.dataset.name = exName;
+    const h3 = document.createElement('h3');
+    h3.textContent = exName;
+    card.appendChild(h3);
+    // sets container
+    const setsDiv = document.createElement('div');
+    setsDiv.className = 'sets';
+    for (let i = 0; i < 3; i++) {
+      const peso = document.createElement('input');
+      peso.type = 'number';
+      peso.placeholder = 'kg';
+      peso.dataset.field = 'peso';
+      peso.dataset.set = i;
+      const reps = document.createElement('input');
+      reps.type = 'number';
+      reps.placeholder = 'reps';
+      reps.dataset.field = 'reps';
+      reps.dataset.set = i;
+      const rir = document.createElement('input');
+      rir.type = 'number';
+      rir.placeholder = 'RIR';
+      rir.dataset.field = 'rir';
+      rir.dataset.set = i;
+      const doneBtn = document.createElement('button');
+      doneBtn.className = 'done';
+      doneBtn.textContent = '✅';
+      doneBtn.dataset.set = i;
+      // When done, mark set as completed and start rest
+      doneBtn.onclick = () => {
+        doneBtn.disabled = true;
+        // beep/vibrate
+        triggerBeep();
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+        // overlay alert
+        alert('Descanso concluído!');
+      };
+      setsDiv.appendChild(peso);
+      setsDiv.appendChild(reps);
+      setsDiv.appendChild(rir);
+      setsDiv.appendChild(doneBtn);
+    }
+    card.appendChild(setsDiv);
+    el.appendChild(card);
   });
-  // handlers para cada exercício
-  listaExEl.querySelectorAll('button.tick').forEach(btn => {
-    btn.addEventListener('click', () => {
-      startSessionIfNeeded();
-      const setEl = btn.closest('.set');
-      setEl.classList.toggle('done');
-      // registra timestamp da conclusão
-      if(setEl.classList.contains('done')){
-        setEl.dataset.ts = new Date().toISOString();
-      }else{
-        delete setEl.dataset.ts;
-      }
-      iniciarDescansoAuto();
-      atualizarTonelagemDoDia();
-      atualizarPrBadges(btn.dataset.ex);
-    });
+  // Tonelagem display
+  const tonDiv = document.createElement('div');
+  tonDiv.id = 'tonelagem';
+  tonDiv.style.marginTop = '16px';
+  el.appendChild(tonDiv);
+  // Save button
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn';
+  saveBtn.textContent = 'Salvar sessão';
+  saveBtn.onclick = async () => {
+    const session = buildSessionFromUI(dateStr);
+    await db.sessoes.put(session);
+    // update state
+    const idx = state.sessions.findIndex(s => s.data === dateStr);
+    if (idx >= 0) state.sessions[idx] = session; else state.sessions.push(session);
+    // push to Firebase if logged in
+    const u = getCurrentUser();
+    if (ENABLE_FIREBASE && u) {
+      await pushSession(u.uid, dateStr, session);
+    }
+    alert('Sessão salva!');
+    renderHome();
+  };
+  el.appendChild(saveBtn);
+  // update tonnage on input changes
+  el.querySelectorAll('input[type="number"]').forEach(inp => {
+    inp.addEventListener('input', updateTonnage);
   });
-  // input do set 0 propaga para sets seguintes
-  listaExEl.querySelectorAll('.set[data-set="0"] .inp').forEach(inp => {
-    inp.addEventListener('change', () => {
-      const nome = inp.dataset.ex;
-      const field = inp.classList.contains('peso') ? '.peso' : inp.classList.contains('reps') ? '.reps' : '.rir';
-      const val = inp.value;
-      [1,2].forEach(i => {
-        const tgt = listaExEl.querySelector(`.sets[data-ex="${CSS.escape(nome)}"] .set[data-set="${i}"] ${field}`);
-        if(tgt && !tgt.value) tgt.value = val;
-      });
-      atualizarTonelagemDoDia();
-      atualizarPrBadges(nome);
-    });
-  });
-  // qualquer digitação recalcula tonelagem e PRs
-  listaExEl.querySelectorAll('.inp').forEach(inp => inp.addEventListener('input', () => {
-    atualizarTonelagemDoDia();
-    atualizarPrBadges(inp.dataset.ex);
-  }));
-  // adicionar série extra
-  listaExEl.querySelectorAll('.add-set').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const nome = btn.dataset.ex;
-      const setsContainer = btn.previousElementSibling;
-      const currentSets = setsContainer.querySelectorAll('.set');
-      const i = currentSets.length;
-      const row = document.createElement('div');
-      row.className = 'set';
-      row.dataset.set = i;
-      row.innerHTML = `
-        <span class="tag">S${i+1}</span>
-        <input type="number" step="0.5" placeholder="kg" class="inp peso" data-ex="${nome}" data-set="${i}" />
-        <input type="number" placeholder="reps" class="inp reps" data-ex="${nome}" data-set="${i}" />
-        <input type="number" placeholder="RIR" class="inp rir" data-ex="${nome}" data-set="${i}" />
-        <button class="tick" type="button" data-ex="${nome}" data-set="${i}" aria-label="Marcar série">✓</button>
-      `;
-      setsContainer.appendChild(row);
-      // bind novos elementos
-      row.querySelector('.tick').addEventListener('click', () => {
-        startSessionIfNeeded();
-        row.classList.toggle('done');
-        if(row.classList.contains('done')) row.dataset.ts = new Date().toISOString(); else delete row.dataset.ts;
-        iniciarDescansoAuto();
-        atualizarTonelagemDoDia();
-        atualizarPrBadges(nome);
-      });
-      row.querySelectorAll('.inp').forEach(inp => {
-        inp.addEventListener('input', () => {
-          atualizarTonelagemDoDia();
-          atualizarPrBadges(nome);
-        });
-      });
-    });
-  });
-  ensureTonelagemBox();
-  atualizarTonelagemDoDia();
-  // adicionar PR badges iniciais
-  arr.forEach(ex => atualizarPrBadges(ex.nome));
+  updateTonnage();
 }
 
-function labelDia(key){
-  return { segunda:'Segunda (Costas+Bíceps)', terca:'Terça (Peito+Tríceps)', quarta:'Quarta (Ombro)', quinta:'Quinta (Perna)', sexta:'Sexta (Braços+Abs)' }[key] || key;
-}
-
-/** Recupera a última entrada registrada para um exercício. */
-function ultimaEntrada(nomeEx){
-  const hist = getSessions();
-  for(let i = hist.length - 1; i >= 0; i--){
-    const e = hist[i].exercicios?.find(x => x.nome === nomeEx);
-    if(e) return e;
-  }
-  return null;
-}
-
-/** Preenche o treino atual com os valores da última sessão do mesmo dia. */
-function preencherComUltima(diaKey){
-  const arr = TREINOS[diaKey] || [];
-  const hist = getSessions();
-  arr.forEach(ex => {
-    const last = hist.slice().reverse().map(s => s.exercicios || []).flat().find(e => e.nome === ex.nome);
-    if(last){
-      last.sets?.forEach((s,i) => {
-        const p = qs(`.sets[data-ex="${CSS.escape(ex.nome)}"] .set[data-set="${i}"] .peso`);
-        const r = qs(`.sets[data-ex="${CSS.escape(ex.nome)}"] .set[data-set="${i}"] .reps`);
-        const rir = qs(`.sets[data-ex="${CSS.escape(ex.nome)}"] .set[data-set="${i}"] .rir`);
-        if(p) p.value = s.peso ?? '';
-        if(r) r.value = s.reps ?? '';
-        if(rir) rir.value = s.rir ?? '';
-        const row = qs(`.sets[data-ex="${CSS.escape(ex.nome)}"] .set[data-set="${i}"]`);
-        row?.classList.toggle('done', !!s.done);
-      });
-      const obs = qs(`textarea[data-field="obs"][data-ex="${CSS.escape(ex.nome)}"]`);
-      if(obs) obs.value = last.obs ?? '';
+// Find last session before date for exercise
+function findLastSessionForExercise(exName, dateStr) {
+  // sort sessions by date ascending
+  const sorted = [...state.sessions].sort((a,b) => a.data.localeCompare(b.data));
+  let last = null;
+  sorted.forEach(sess => {
+    if (sess.data < dateStr) {
+      const ex = sess.exercicios.find(e => e.nome === exName);
+      if (ex) last = ex;
     }
   });
-  atualizarTonelagemDoDia();
-  arr.forEach(ex => atualizarPrBadges(ex.nome));
+  return last;
 }
 
-/** Calcula a tonelagem (kg×reps) de um exercício a partir da UI. */
-function tonelagemExercicioFromUI(nome){
-  let total = 0;
-  qsa(`.sets[data-ex="${CSS.escape(nome)}"] .set`).forEach(row => {
-    if(row.classList.contains('done')){
-      const kg = Number(row.querySelector('.peso')?.value || 0);
-      const reps = Number(row.querySelector('.reps')?.value || 0);
-      if(kg > 0 && reps > 0) total += kg * reps;
-    }
-  });
-  return total;
-}
-function atualizarTonelagemDoDia(){
-  const exs = [...new Set([...qsa('.sets')].map(s => s.dataset.ex))];
-  let html = '';
-  let totalDia = 0;
-  exs.forEach(n => {
-    const t = tonelagemExercicioFromUI(n);
-    if(t > 0){ html += `<div>${n}: <b>${t}</b> kg·reps</div>`; totalDia += t; }
-  });
-  if(!html) html = '—';
-  ensureTonelagemBox();
-  qs('#tonelagemLista').innerHTML = html + (totalDia ? `<div style="margin-top:6px"><b>Total do dia:</b> ${totalDia} kg·reps</div>` : '');
-}
-
-/** Sugere o próximo peso com base na sessão mais recente. */
-function sugerirProximoPeso(nomeEx){
-  const hist = getSessions().slice().reverse();
-  for(const s of hist){
-    const e = s.exercicios?.find(x => x.nome === nomeEx);
-    if(e){
-      // soma reps totais e verifica se todas as 3 séries têm 12 reps ou total ≥34 dentro do range 8-12
-      const repsArr = e.sets?.map(z => Number(z.reps || 0)) || [];
-      const pesoArr = e.sets?.map(z => Number(z.peso || 0)) || [];
-      const lastKg = Math.max(...pesoArr, 0);
-      const totalReps = repsArr.reduce((a,b) => a + b, 0);
-      const all12 = repsArr.length >= 3 && repsArr.every(r => r >= 12);
-      if(lastKg && (all12 || totalReps >= 34)){
-        const incremento = EXERCICIOS_PERNA.some(n => n.toLowerCase() === nomeEx.toLowerCase()) ? 5 : 2;
-        return lastKg + incremento;
-      }else{
-        return '';
-      }
-    }
-  }
-  return '';
-}
-
-/** Atualiza o badge de PR na interface para um exercício específico. */
-function atualizarPrBadges(nomeEx){
-  // calcula recordes a partir do histórico
-  const hist = getSessions();
-  const prs = computePRs(hist, nomeEx, 180);
-  const bestKg = prs.bestKg.val || 0;
-  const bestReps = prs.bestReps.val || 0;
-  const bestRm = prs.bestRm.val || 0;
-  // percorre sets atuais
-  qsa(`.sets[data-ex="${CSS.escape(nomeEx)}"] .set`).forEach(row => {
-    // remove badge existente
-    row.querySelectorAll('.pr-badge').forEach(b => b.remove());
-    const kg = Number(row.querySelector('.peso')?.value || 0);
-    const reps = Number(row.querySelector('.reps')?.value || 0);
-    if(kg > 0 && reps > 0){
-      let isPr = false;
-      // novo recorde de carga
-      if(kg > bestKg){ isPr = true; }
-      // novo recorde de reps na mesma carga
-      if(kg === bestKg && reps > bestReps){ isPr = true; }
-      // novo recorde de 1RM
-      const rm = kg * (1 + reps / 30);
-      if(rm > bestRm){ isPr = true; }
-      if(isPr){
-        const badge = document.createElement('span');
-        badge.className = 'pr-badge';
-        badge.textContent = '🏆';
-        row.querySelector('.tick')?.insertAdjacentElement('afterend', badge);
-      }
-    }
-  });
-}
-
-/* === Salvar sessão atual === */
-salvarBtn.addEventListener('click', () => salvarSessaoAtual(null));
-
-function coletarInputsExercicios(){
-  const map = {}; // nome -> objeto com sets, obs
-  qsa('.sets').forEach(box => {
-    const nome = box.dataset.ex;
-    map[nome] = map[nome] || { nome, ordem: Array.from(box.parentElement.parentElement.children).indexOf(box.parentElement), sets: [], obs:'' };
-    box.querySelectorAll('.set').forEach(setEl => {
-      const i = Number(setEl.dataset.set);
-      const peso = setEl.querySelector('.peso')?.value || '';
-      const reps = setEl.querySelector('.reps')?.value || '';
-      const rir = setEl.querySelector('.rir')?.value || '';
-      const done = setEl.classList.contains('done');
-      const ts = setEl.dataset.ts || null;
-      map[nome].sets[i] = { n: i+1, peso, reps, rir, done, ts };
+// Build session object from treino UI
+function buildSessionFromUI(dateStr) {
+  const exercicios = [];
+  document.querySelectorAll('#treino .card').forEach(card => {
+    const nome = card.dataset.name;
+    const sets = [];
+    const pesoInputs = card.querySelectorAll('input[data-field="peso"]');
+    const repsInputs = card.querySelectorAll('input[data-field="reps"]');
+    const rirInputs = card.querySelectorAll('input[data-field="rir"]');
+    pesoInputs.forEach((inp, idx) => {
+      sets[idx] = {
+        peso: parseFloat(inp.value) || 0,
+        reps: parseInt(repsInputs[idx].value) || 0,
+        rir: rirInputs[idx].value ? parseInt(rirInputs[idx].value) : null,
+        done: card.querySelectorAll('button.done')[idx].disabled || false
+      };
     });
+    exercicios.push({ nome, sets, obs: '' });
   });
-  // obs
-  qsa('textarea[data-field="obs"]').forEach(t => {
-    const nome = t.dataset.ex;
-    if(map[nome]) map[nome].obs = t.value;
-  });
-  return Object.values(map);
-}
-
-function salvarSessaoAtual(duracaoParam){
-  // calcula duração final
-  let duracaoFinal = 0;
-  if(duracaoParam != null){ duracaoFinal = duracaoParam; }
-  else if(startEpoch){ duracaoFinal = Math.floor((Date.now() - startEpoch) / 1000); }
-  const hoje = new Date();
-  const dataStr = hoje.toISOString().slice(0,10);
-  const diaKey = qs('#diasTabs .tab-btn.active')?.dataset.dia || DIAS_MAP[hoje.getDay()];
-  const exercicios = coletarInputsExercicios();
-  // calcula volume total (kg×reps de sets marcadas) e PRs
+  // compute duration (use start/stop if you implement timer)
+  const duration = 0;
+  const dia = getDayName(dateStr);
+  // compute volume
   let volume = 0;
-  const prHits = [];
   exercicios.forEach(ex => {
-    ex.sets.forEach(z => {
-      const kg = Number(z.peso || 0);
-      const reps = Number(z.reps || 0);
-      if(kg > 0 && reps > 0 && z.done){ volume += kg * reps; }
+    ex.sets.forEach(s => { volume += (s.peso || 0) * (s.reps || 0); });
+  });
+  return { data: dateStr, duracao: duration, dia, exercicios, volume };
+}
+
+// Compute and update tonnage display
+function updateTonnage() {
+  let total = 0;
+  document.querySelectorAll('#treino .card').forEach(card => {
+    let exTotal = 0;
+    const pesoInputs = card.querySelectorAll('input[data-field="peso"]');
+    const repsInputs = card.querySelectorAll('input[data-field="reps"]');
+    pesoInputs.forEach((inp, idx) => {
+      const kg = parseFloat(inp.value) || 0;
+      const reps = parseInt(repsInputs[idx].value) || 0;
+      exTotal += kg * reps;
     });
-    // detectar PRs
-    const hist = getSessions();
-    const prs = computePRs(hist, ex.nome, 9999);
-    ex.sets.forEach(z => {
-      const kg = Number(z.peso || 0);
-      const reps = Number(z.reps || 0);
-      if(kg > 0 && reps > 0){
-        const rm = kg * (1 + reps / 30);
-        let tipo = null;
-        if(kg > prs.bestKg.val) tipo = 'carga';
-        else if(kg === prs.bestKg.val && reps > prs.bestReps.val) tipo = 'reps';
-        else if(rm > prs.bestRm.val) tipo = '1rm';
-        if(tipo){ prHits.push({ ex: ex.nome, tipo, valor: tipo === '1rm' ? Number(rm.toFixed(2)) : (tipo === 'carga' ? kg : reps), data: hoje.toISOString() }); }
+    total += exTotal;
+  });
+  const tonDiv = document.getElementById('tonelagem');
+  if (tonDiv) tonDiv.textContent = `Tonelagem total: ${total} kg`;
+}
+
+// Beep using WebAudio or fallback beep.mp3
+function triggerBeep() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.15);
+  } catch (e) {
+    // fallback to audio file
+    const audio = new Audio('assets/beep.mp3');
+    audio.play();
+  }
+}
+
+/**
+ * Render Evolução tab
+ */
+function renderEvolucao() {
+  const el = document.getElementById('evolucao');
+  el.innerHTML = '';
+  // Tabs
+  const tabs = document.createElement('div');
+  tabs.className = 'tabs';
+  const tabResumo = document.createElement('button'); tabResumo.textContent = 'Resumo';
+  const tabGraficos = document.createElement('button'); tabGraficos.textContent = 'Gráficos';
+  const tabPRs = document.createElement('button'); tabPRs.textContent = 'PRs';
+  const tabVolume = document.createElement('button'); tabVolume.textContent = 'Tonelagem';
+  tabs.append(tabResumo, tabGraficos, tabPRs, tabVolume);
+  el.appendChild(tabs);
+  const container = document.createElement('div');
+  el.appendChild(container);
+  function clearActive() {
+    tabs.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+    container.innerHTML = '';
+  }
+  tabResumo.onclick = () => {
+    clearActive(); tabResumo.classList.add('active');
+    drawResumo(container);
+  };
+  tabGraficos.onclick = () => {
+    clearActive(); tabGraficos.classList.add('active');
+    drawGraficos(container);
+  };
+  tabPRs.onclick = () => {
+    clearActive(); tabPRs.classList.add('active');
+    drawPRs(container);
+  };
+  tabVolume.onclick = () => {
+    clearActive(); tabVolume.classList.add('active');
+    drawVolume(container);
+  };
+  // Default tab
+  tabResumo.click();
+}
+
+function drawResumo(container) {
+  const totalTreinos = state.sessions.length;
+  const volumeTotal = state.sessions.reduce((acc, s) => acc + (s.volume || 0), 0);
+  const tempoTotal = state.sessions.reduce((acc, s) => acc + (s.duracao || 0), 0);
+  const top3 = computeTopExercises(state.sessions, 30);
+  const div = document.createElement('div');
+  div.innerHTML = `<p>Total de treinos: <strong>${totalTreinos}</strong></p>
+  <p>Volume total: <strong>${volumeTotal}</strong> kg·reps</p>
+  <p>Tempo total: <strong>${tempoTotal}</strong> min</p>`;
+  if (top3.length) {
+    div.innerHTML += '<p>Top 3 exercícios:</p><ol>' + top3.map(item => `<li>${item.nome} – ${item.total} kg·reps</li>`).join('') + '</ol>';
+  }
+  container.appendChild(div);
+}
+
+function drawGraficos(container) {
+  // create form to select exercise and period
+  const selEx = document.createElement('select');
+  const exNames = Array.from(new Set(state.sessions.flatMap(s => s.exercicios.map(e => e.nome))));
+  exNames.forEach(name => {
+    const opt = document.createElement('option'); opt.value = name; opt.textContent = name; selEx.appendChild(opt);
+  });
+  const selPeriod = document.createElement('select');
+  [{ label:'30 dias', value:30 }, {label:'60 dias', value:60}, {label:'90 dias', value:90}, {label:'180 dias', value:180}].forEach(optData => {
+    const opt = document.createElement('option'); opt.value = optData.value; opt.textContent = optData.label; selPeriod.appendChild(opt);
+  });
+  container.appendChild(selEx);
+  container.appendChild(selPeriod);
+  const canvas1 = document.createElement('canvas');
+  const canvas2 = document.createElement('canvas');
+  container.appendChild(canvas1);
+  container.appendChild(canvas2);
+  function updateCharts() {
+    const exercise = selEx.value;
+    const days = parseInt(selPeriod.value);
+    const cutoff = Date.now() - days * 86400000;
+    const { labels: labelsMax, data: dataMax } = computeMaxLoadData(state.sessions, exercise, cutoff);
+    const { labels: labelsRm, data: dataRm } = compute1RMData(state.sessions, exercise, cutoff);
+    // destroy previous charts if present
+    if (canvas1._chart) { canvas1._chart.destroy(); }
+    if (canvas2._chart) { canvas2._chart.destroy(); }
+    canvas1._chart = drawLineChart(canvas1.getContext('2d'), labelsMax, dataMax, 'Carga Máx. (kg)');
+    canvas2._chart = drawLineChart(canvas2.getContext('2d'), labelsRm, dataRm, '1RM Est. (kg)');
+  }
+  selEx.onchange = updateCharts;
+  selPeriod.onchange = updateCharts;
+  updateCharts();
+}
+
+function drawPRs(container) {
+  const list = document.createElement('ul');
+  // find all PRs in sessions
+  const prs = [];
+  const bestByEx = {};
+  state.sessions.forEach(sess => {
+    sess.exercicios.forEach(ex => {
+      ex.sets.forEach(set => {
+        if (!set.done) return;
+        const key = ex.nome;
+        if (!bestByEx[key]) bestByEx[key] = { peso: 0, reps: 0, rm: 0, vol: 0 };
+        // Peso PR
+        if (set.peso > bestByEx[key].peso) {
+          bestByEx[key].peso = set.peso;
+          prs.push({ data: sess.data, ex: key, tipo: 'Peso', valor: set.peso });
+        }
+        // Reps PR na mesma carga
+        if (set.peso === bestByEx[key].peso && set.reps > bestByEx[key].reps) {
+          bestByEx[key].reps = set.reps;
+          prs.push({ data: sess.data, ex: key, tipo: 'Reps', valor: set.reps });
+        }
+        // 1RM PR
+        const rm = set.peso * (1 + set.reps / 30);
+        if (rm > bestByEx[key].rm) {
+          bestByEx[key].rm = rm;
+          prs.push({ data: sess.data, ex: key, tipo: '1RM', valor: rm.toFixed(1) });
+        }
+      });
+      // Volume PR por dia
+      const vol = ex.sets.reduce((acc, s) => acc + (s.peso || 0)*(s.reps || 0), 0);
+      if (vol > (bestByEx[ex.nome].vol || 0)) {
+        bestByEx[ex.nome].vol = vol;
+        prs.push({ data: sess.data, ex: ex.nome, tipo: 'Volume', valor: vol });
       }
     });
   });
-  const nova = { data: dataStr, duracao: duracaoFinal || 0, splitDia: diaKey, exercicios, volume, prHits };
-  const sess = getSessions().filter(s => s.data !== dataStr);
-  sess.push(nova);
-  sess.sort((a,b) => a.data.localeCompare(b.data));
-  setSessions(sess);
-  // marca o dia no calendário
-  marcarHojeNoCalendario();
-  qs('#statusSave').textContent = '✅ Sessão salva!';
-  setTimeout(() => qs('#statusSave').textContent = '', 2000);
-  desenharGraficos();
-  preencherSessoesDetalhe();
-  // salva na nuvem
-  if(enableFirebase) pushSession(nova).catch(() => {});
-  // encerra timer principal
-  stopSession();
-}
-
-function marcarHojeNoCalendario(){
-  const hoje = new Date();
-  const y = hoje.getFullYear();
-  const m = hoje.getMonth();
-  if(y === viewAno && m === viewMes){
-    const diaSel = String(hoje.getDate()).padStart(2, '0');
-    const el = [...document.querySelectorAll('.dia')].find(d => d.dataset.dia === diaSel);
-    if(el){ el.classList.remove('nao-treino'); el.classList.add('treino'); }
-  }
-  atualizarResumoHome();
-}
-
-/* === Evolução === */
-const selectEx = qs('#selectExercicio');
-const periodoSel = qs('#periodo');
-const chartArea = qs('#chartArea');
-const prListEl = qs('#prList');
-let filtroDia = 'all';
-// criar lista de exercícios para seleção
-function popularListaExerciciosChart(){
-  const nomes = new Set();
-  getSessions().forEach(s => (s.exercicios || []).forEach(e => nomes.add(e.nome)));
-  Object.values(TREINOS).flat().forEach(e => nomes.add(e.nome));
-  selectEx.innerHTML = '';
-  [...nomes].sort().forEach(n => {
-    const op = document.createElement('option'); op.value = n; op.textContent = n; selectEx.appendChild(op);
+  prs.sort((a,b) => b.data.localeCompare(a.data));
+  prs.forEach(pr => {
+    const li = document.createElement('li');
+    li.textContent = `${pr.data}: ${pr.ex} – ${pr.tipo} PR (${pr.valor})`;
+    list.appendChild(li);
   });
+  container.appendChild(list);
 }
-selectEx.addEventListener('change', () => { desenharGraficos(); preencherSessoesDetalhe(); });
-periodoSel.addEventListener('change', () => { desenharGraficos(); preencherSessoesDetalhe(); });
-// trocar tipo de gráfico
-qsa('.chart-type').forEach(btn => {
-  btn.addEventListener('click', () => {
-    qsa('.chart-type').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    desenharGraficos();
-  });
-});
 
-function getFiltroDia(){ return filtroDia; }
+function drawVolume(container) {
+  const canvas = document.createElement('canvas');
+  container.appendChild(canvas);
+  const { labels, data } = computeWeeklyVolumeData(state.sessions);
+  drawBarChart(canvas.getContext('2d'), labels, data, 'Volume semanal');
+}
 
-function desenharGraficos(){
-  const tipo = qs('.chart-type.active')?.dataset.type || 'max';
-  const ex = selectEx.value;
-  const period = periodoSel.value;
-  const sessions = getSessions();
-  const ctx = qs('#mainChart').getContext('2d');
-  prListEl.style.display = 'none';
-  qs('#mainChart').style.display = 'block';
-  if(!ex) return;
-  if(tipo === 'max'){
-    const { labels, values } = computeMaxLoadData(sessions, ex, period, getFiltroDia());
-    drawLineChart(ctx, labels, values, `${ex} (kg)`);
-  }else if(tipo === '1rm'){
-    const { labels, values } = compute1RMData(sessions, ex, period, getFiltroDia());
-    drawLineChart(ctx, labels, values, `${ex} 1RM Est.`);
-  }else if(tipo === 'volume'){
-    const { labels, values } = computeWeeklyVolumeData(sessions, period, getFiltroDia());
-    drawBarChart(ctx, labels, values, 'Volume semanal (kg·reps)');
-  }else if(tipo === 'prs'){
-    // exibir lista de recordes pessoais
-    qs('#mainChart').style.display = 'none';
-    prListEl.style.display = 'block';
-    const prs = computePRs(sessions, ex, period);
-    prListEl.innerHTML = '<ul>' + [
-      prs.bestKg.val ? `<li><b>Carga:</b> ${prs.bestKg.val} kg (${prs.bestKg.data})</li>` : '',
-      prs.bestReps.val ? `<li><b>Reps:</b> ${prs.bestReps.val} reps @ ${prs.bestReps.kg} kg (${prs.bestReps.data})</li>` : '',
-      prs.bestRm.val ? `<li><b>1RM:</b> ${prs.bestRm.val} kg (${prs.bestRm.data})</li>` : ''
-    ].filter(Boolean).join('') + '</ul>';
+/**
+ * Render perfil page with habits and profile
+ */
+function renderPerfil() {
+  const el = document.getElementById('perfil');
+  el.innerHTML = '';
+  const u = getCurrentUser();
+  const heading = document.createElement('h2');
+  heading.textContent = 'Perfil';
+  el.appendChild(heading);
+  if (u) {
+    const info = document.createElement('div');
+    info.innerHTML = `<p><img src="${u.photoURL}" alt="avatar" style="width:64px;border-radius:50%" /><br/>${u.displayName}<br/>${u.email}</p>`;
+    const logoutBtn = document.createElement('button');
+    logoutBtn.className = 'btn'; logoutBtn.textContent = 'Sair';
+    logoutBtn.onclick = async () => { await logout(); };
+    info.appendChild(logoutBtn);
+    el.appendChild(info);
+  } else if (ENABLE_FIREBASE) {
+    const loginBtn = document.createElement('button'); loginBtn.className = 'btn'; loginBtn.textContent = 'Entrar com Google';
+    loginBtn.onclick = async () => { await loginWithGoogle(); };
+    el.appendChild(loginBtn);
   }
-}
-
-function preencherSessoesDetalhe(){
-  const listaSessoesDetalhe = qs('#listaSessoesDetalhe');
-  if(!listaSessoesDetalhe) return;
-  const days = Number(periodoSel.value || 90);
-  const desde = new Date(); desde.setDate(desde.getDate() - days);
-  const arr = getSessions().filter(s => new Date(s.data) >= desde).slice(-12).reverse();
-  listaSessoesDetalhe.innerHTML = '';
-  arr.forEach(s => {
-    const box = document.createElement('div');
-    box.className = 'card-mini';
-    const title = `${s.data} · ${labelDia(s.splitDia || '')} · ${fmtDuracao(s.duracao || 0)} · Vol: ${s.volume || 0} kg·reps`;
-    const lista = (s.exercicios || []).map(e => {
-      if(e.sets && e.sets.length){
-        const setsStr = e.sets.map((z,i) => `${i+1}:${z.peso||'-'}kg×${z.reps||'-'}${z.done?'✓':''}`).join(' | ');
-        return `<li>${e.nome}: ${setsStr}${e.obs ? ` <span class="muted">(${e.obs})</span>` : ''}</li>`;
-      }else{
-        return `<li>${e.nome}: <b>${e.peso||'-'}</b> kg × <b>${e.reps||'-'}</b>${e.obs ? ` <span class="muted">(${e.obs})</span>` : ''}</li>`;
+  // Habits checklist
+  const habitsTitle = document.createElement('h3'); habitsTitle.textContent = 'Hábitos diários';
+  el.appendChild(habitsTitle);
+  const list = document.createElement('ul'); list.className = 'habitos-list';
+  const labels = ['Acordar no horário','Café da manhã','Creatina','Almoço','Pré-treino','Beber 2.5L água','Dormir >7h'];
+  const today = formatDate(new Date());
+  const todayHab = state.habits[today] || { data: today };
+  labels.forEach(key => {
+    const li = document.createElement('li');
+    const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = !!todayHab[key];
+    checkbox.onchange = async () => {
+      todayHab[key] = checkbox.checked;
+      state.habits[today] = todayHab;
+      await db.habitos.put({ data: today, ...todayHab });
+      const u = getCurrentUser();
+      if (ENABLE_FIREBASE && u) {
+        await pushHabits(u.uid, today, todayHab);
       }
-    }).join('');
-    box.innerHTML = `<div><strong>${title}</strong><ul>${lista || '<li class="muted">sem exercícios</li>'}</ul></div>`;
-    listaSessoesDetalhe.appendChild(box);
+      renderPerfil();
+    };
+    const lbl = document.createElement('span'); lbl.textContent = key;
+    li.appendChild(checkbox);
+    li.appendChild(lbl);
+    list.appendChild(li);
   });
+  el.appendChild(list);
+  // Medals (simple counters)
+  const medals = document.createElement('div'); medals.style.marginTop = '16px';
+  medals.innerHTML = '<h3>Medalhas</h3>';
+  const daysInARow = parseInt(document.getElementById('streakCount').textContent);
+  const totalTrainings = state.sessions.length;
+  const totalPRs = document.querySelectorAll('#evolucao li').length;
+  if (daysInARow >= 3) medals.innerHTML += '<p>🏅 3 dias seguidos</p>';
+  if (totalTrainings >= 30) medals.innerHTML += '<p>🥈 30 treinos concluídos</p>';
+  if (totalPRs >= 100) medals.innerHTML += '<p>🥇 100 PRs conquistados</p>';
+  el.appendChild(medals);
 }
 
-function atualizarEvolucaoUI(){
-  popularListaExerciciosChart();
-  desenharGraficos();
-  preencherSessoesDetalhe();
-}
-
-/* === Perfil e hábitos === */
-const habits = [
-  { key:'acordar', label:'Acordar no horário' },
-  { key:'cafe', label:'Café da manhã' },
-  { key:'creatina', label:'Creatina' },
-  { key:'almoco', label:'Almoço' },
-  { key:'pre', label:'Pré-treino' },
-  { key:'agua', label:'Beber ≥ 2,5 L' },
-  { key:'sono7', label:'Dormir > 7h' }
-];
-function atualizarPerfilUI(){
-  // Status de login
-  const statusEl = qs('#userStatus');
-  const syncEl = qs('#syncInfo');
-  if(enableFirebase){
-    if(firebaseOk && fb.user){
-      statusEl.textContent = `Logado: ${fb.user.displayName || fb.user.email}`;
-      qs('#btnLogin').style.display = 'none';
-      qs('#btnLogout').style.display = '';
-      syncEl.textContent = 'Sincronização: Conectado';
-    }else if(firebaseOk){
-      statusEl.textContent = 'Não logado';
-      qs('#btnLogin').style.display = '';
-      qs('#btnLogout').style.display = 'none';
-      syncEl.textContent = 'Sincronização: Offline';
-    }else{
-      statusEl.textContent = 'Firebase indisponível (modo local)';
-      qs('#btnLogin').style.display = 'none';
-      qs('#btnLogout').style.display = 'none';
-      syncEl.textContent = 'Sincronização: —';
-    }
-  }else{
-    statusEl.textContent = 'Modo local';
-    syncEl.textContent = 'Sincronização desativada';
-    qs('#btnLogin').style.display = 'none';
-    qs('#btnLogout').style.display = 'none';
-  }
-  // Construir lista de hábitos
-  const listEl = qs('#habitsList');
-  listEl.innerHTML = '';
-  const todayStr = new Date().toISOString().slice(0,10);
-  habits.forEach(h => {
-    const item = document.createElement('div');
-    item.className = 'habit-item';
-    const input = document.createElement('input');
-    input.type = 'checkbox';
-    input.checked = !!getHabits()[todayStr]?.[h.key];
-    input.addEventListener('change', () => {
-      updateHabit(todayStr, h.key, input.checked);
-      atualizarPerfilUI();
-    });
-    const label = document.createElement('label'); label.textContent = h.label;
-    const streak = document.createElement('span'); streak.className = 'habit-streak'; streak.textContent = `${computeHabitStreak(h.key)}🔥`;
-    item.appendChild(input);
-    item.appendChild(label);
-    item.appendChild(streak);
-    listEl.appendChild(item);
-  });
-}
-qs('#btnLogin').addEventListener('click', async () => {
-  try{ await loginWithGoogle(); }catch(_){ alert('Falha no login'); }
-});
-qs('#btnLogout').addEventListener('click', async () => {
-  try{ await logout(); }catch(_){}
-});
-
-qs('#btnExport').addEventListener('click', () => {
-  const blob = new Blob([localStorage.getItem('sessoes') || '[]'], { type:'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `sessoes_${new Date().toISOString().slice(0,10)}.json`;
-  a.click();
-});
-
-/* === Utilitários === */
-function fmtDuracao(sec){
-  const h = String(Math.floor(sec/3600)).padStart(2,'0');
-  const m = String(Math.floor((sec % 3600)/60)).padStart(2,'0');
-  const s = String(sec % 60).padStart(2,'0');
-  return `${h}:${m}:${s}`;
-}
-
-/* === Inicialização da aplicação === */
-(async function init(){
-  // texto no cabeçalho com treino do dia
-  function textoTreinoHoje(){
-    const d = new Date().getDay();
-    let nome = 'Descanso';
-    if(d === 1) nome = 'Costas + Bíceps';
-    if(d === 2) nome = 'Peito + Tríceps';
-    if(d === 3) nome = 'Ombro';
-    if(d === 4) nome = 'Perna';
-    if(d === 5) nome = 'Braços + Abs';
-    return `Hoje é ${new Date().toLocaleDateString()} · Treino do dia: ${nome}`;
-  }
-  qs('#subheader').textContent = textoTreinoHoje();
-  // inicia Firebase e define callback de mudança de usuário
-  await initFirebase(async (user) => {
-    // quando logar, mescla sessões locais
-    if(user){
-      await pullAllSessionsAndMerge(getSessions, setSessions);
-    }
-    atualizarPerfilUI();
-    atualizarResumoHome();
-    desenharGraficos();
-    preencherSessoesDetalhe();
-  });
-  // popule listas iniciais
-  montarExercicios('segunda');
-  popularListaExerciciosChart();
-  preencherSessoesDetalhe();
-  atualizarPerfilUI();
-  atualizarResumoHome();
-  desenharGraficos();
-  // registrar service worker para PWA
-  if('serviceWorker' in navigator){
-    try{ await navigator.serviceWorker.register('sw.js'); }catch(_){}
-  }
-})();
+// Kickoff
+window.addEventListener('DOMContentLoaded', init);
