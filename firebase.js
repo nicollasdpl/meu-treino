@@ -3,7 +3,10 @@
  * It provides Google Auth login and sync functions for sessions, habits and photos.
  */
 
-export const ENABLE_FIREBASE = false; // set to true to enable sync/login
+// When true the app requires Google login and syncs with Firestore/Storage.
+// Set to false to run completely offline.  Updated to true by default so
+// that the login button works.
+export const ENABLE_FIREBASE = true;
 
 // Firebase config provided by the user
 const firebaseConfig = {

@@ -1,6 +1,10 @@
 // app.js – lógica principal do Meu Treino 2.0
 
-import { ENABLE_FIREBASE, loginWithGoogle, logout, onAuthChange, getCurrentUser, pullSessions, pushSession, pullHabits, pushHabits, uploadPhoto } from './firebase.js';
+// Import firebase.js with version query to bust the cache. Without the query
+// the service worker may serve a stale version of firebase.js which can
+// cause ENABLE_FIREBASE flag to be out of sync. The version number should
+// match the one used in index.html and sw.js.
+import { ENABLE_FIREBASE, loginWithGoogle, logout, onAuthChange, getCurrentUser, pullSessions, pushSession, pullHabits, pushHabits, uploadPhoto } from './firebase.js?v=2025110412';
 import { computeMaxLoadData, compute1RMData, computeWeeklyVolumeData, computeTopExercises, drawLineChart, drawBarChart } from './charts.js';
 
 // Dexie DB initialization
