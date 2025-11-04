@@ -1,3 +1,18 @@
+/*
+  Folha de estilos para o projeto "Meu Treino".
+
+  Foram utilizadas variáveis CSS para facilitar a criação de temas (claro/escuro).
+  A maior parte do layout é responsiva e utiliza grid/flex para uma melhor
+  organização. Componentes como cartões, botões e inputs têm tamanhos
+  mínimos para evitar zoom indesejado em dispositivos iOS (Safari).
+
+  Alterações em relação à versão original:
+    • Adicionadas abas para tipos de gráfico em Evolução
+    • Adicionadas classes para inputs de RIR, botões de adicionar série e hábitos
+    • Adicionado badge de PR (🏆)
+    • Ajustados tamanhos mínimos de input (≥16px) para evitar zoom
+*/
+
 :root{
   --bg:#ffffff; --text:#1b1b1b; --muted:#667085;
   --card:#f6f7f9; --primary:#6f42c1; --success:#1a9d57; --border:#e6e8eb;
@@ -58,7 +73,7 @@ main{
 .dia.nao-treino{opacity:.6}
 .dia.fora{visibility:hidden}
 
-.resumo{display:grid;gap:10px;grid-template-columns:repeat(3,1fr)}
+.resumo{display:grid;gap:10px;grid-template-columns:repeat(4,1fr)}
 @media (max-width:800px){.resumo{grid-template-columns:1fr}}
 
 .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px}
@@ -68,7 +83,7 @@ main{
 .timer{display:flex;gap:10px;align-items:center;margin-left:auto}
 .timer #timer{font-weight:600}
 
-/* === Exercícios com 3 séries === */
+/* === Exercícios com séries === */
 .ex-card{
   display:grid;grid-template-columns:1fr;gap:8px;
   align-items:center;border:1px solid var(--border);border-radius:12px;padding:12px;margin:10px 0;background:var(--card)
@@ -76,17 +91,24 @@ main{
 .ex-head{display:flex;align-items:center;justify-content:space-between}
 .sets{display:grid;gap:8px}
 .set{
-  display:grid;grid-template-columns:auto 1fr 1fr auto;gap:8px;align-items:center;
+  display:grid;grid-template-columns:auto 1fr 1fr 1fr auto;gap:8px;align-items:center;
   padding:8px;border:1px dashed var(--border);border-radius:10px;background:color-mix(in oklab, var(--card) 92%, transparent)
 }
 .set .tag{font-size:12px;color:var(--muted);padding:4px 8px;border:1px solid var(--border);border-radius:999px}
 .set .inp{width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--text);font-size:15px}
+.set .inp.rir{max-width:60px}
 .set .tick{
   width:44px;height:40px;border-radius:10px;border:1px solid var(--border);background:var(--card);font-weight:700
 }
 .set.done{background:color-mix(in oklab, var(--success) 18%, var(--card) 82%);border-color:color-mix(in oklab, var(--success) 40%, var(--border) 60%)}
 .set.done .tick{background:var(--success);color:#fff;border-color:var(--success)}
 .obs-wrap textarea{width:100%;padding:10px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--text);font-size:15px}
+
+/* Botão para adicionar série extra */
+.add-set{
+  display:block;margin-top:6px;padding:6px 10px;font-size:14px;
+  border:1px dashed var(--border);border-radius:8px;background:var(--card);cursor:pointer;
+}
 
 /* Nav fixa */
 nav{
@@ -113,3 +135,26 @@ nav button{
 .overlay.hidden{display:none}
 .modal{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:18px;padding:20px;max-width:360px;width:90%;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.35)}
 .stack{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+
+/* Tabs para tipos de gráfico */
+.tabs-type{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 14px}
+.chart-type{
+  border:1px solid var(--border);background:var(--card);
+  padding:8px 12px;border-radius:10px;cursor:pointer
+}
+.chart-type.active{background:var(--chip);border-color:transparent;color:var(--chip-text)}
+
+/* Lista de hábitos */
+.habits-list{display:grid;gap:10px}
+.habit-item{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px;border:1px solid var(--border);border-radius:12px;background:var(--card)
+}
+.habit-item label{flex:1;margin-left:8px;font-size:16px}
+.habit-streak{font-size:14px;color:var(--muted);margin-left:8px}
+.habit-item input[type='checkbox']{
+  transform:scale(1.3);margin-right:8px
+}
+
+/* Badge de PR */
+.pr-badge{margin-left:4px;color:var(--success);font-size:18px;line-height:1}
