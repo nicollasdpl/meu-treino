@@ -1,15 +1,15 @@
 // Service Worker for Meu Treino 2.0
 // Update cache name to force old caches to be purged when new version is deployed.
-const CACHE_NAME = 'mt-v20251104-1300';
+const CACHE_NAME = 'mt-v20251104-1400';
 // List of assets to precache. Each entry should include a version query
 // matching the one used in index.html so that updated files are fetched.
 const ASSETS = [
   '/',
   '/index.html',
-  '/style.css?v=2025110412',
-  '/app.js?v=2025110412',
-  '/charts.js?v=2025110412',
-  '/firebase.js?v=2025110412',
+  '/style.css?v=2025110413',
+  '/app.js?v=2025110413',
+  '/charts.js?v=2025110413',
+  '/firebase.js?v=2025110413',
   '/manifest.json',
   '/icons/icon-192.png',
   '/icons/icon-512.png',

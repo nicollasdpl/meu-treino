@@ -32,7 +32,7 @@ async function initFirebase() {
   if (!ENABLE_FIREBASE) return;
   if (app) return;
   const { initializeApp } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-app.js');
-  const { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
+  const { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-auth.js');
   const { getFirestore, doc, setDoc, getDoc, collection, getDocs, query, where, onSnapshot } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-firestore.js');
   const { getStorage, ref, uploadBytes, getDownloadURL } = await import('https://www.gstatic.com/firebasejs/10.11.0/firebase-storage.js');
 
@@ -51,9 +51,23 @@ export async function loginWithGoogle() {
   if (!ENABLE_FIREBASE) return null;
   const fb = await initFirebase();
   const provider = new fb.GoogleAuthProvider();
-  const result = await fb.signInWithPopup(fb.auth, provider);
-  user = result.user;
-  return user;
+  try {
+    // Try the popup first. Some browsers or PWA contexts block pop‑ups.
+    const result = await fb.signInWithPopup(fb.auth, provider);
+    user = result.user;
+    return user;
+  } catch (e) {
+    console.warn('Popup login failed, falling back to redirect', e);
+    try {
+      await fb.signInWithRedirect(fb.auth, provider);
+      // After redirect the page will reload and onAuthStateChanged will fire.
+      return null;
+    } catch (e2) {
+      console.error('Redirect login error', e2);
+      alert('Erro ao entrar: ' + e2.message);
+      throw e2;
+    }
+  }
 }
 
 /**
