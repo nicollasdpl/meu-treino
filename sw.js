@@ -1,39 +1,45 @@
-const VER = 'v2.1.0';
-const CORE = [
-  './',
-  './index.html',
-  './style.css',
-  './script.js',
-  './manifest.webmanifest',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
-  './icons/apple-touch-icon.png',
-  'https://cdn.jsdelivr.net/npm/chart.js'
+const CACHE_NAME = 'meu-treino-static-v1';
+const STATIC_ASSETS = [
+  '/',
+  '/index.html',
+  '/style.css',
+  '/app.js',
+  '/charts.js',
+  '/firebase.js',
+  '/manifest.json',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/apple-touch-icon.png',
+  '/assets/beep.mp3'
 ];
 
-self.addEventListener('install', (e) => {
-  e.waitUntil(
-    caches.open(VER).then(c => c.addAll(CORE)).then(() => self.skipWaiting())
+self.addEventListener('install', evt => {
+  evt.waitUntil(
+    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
   );
 });
 
-self.addEventListener('activate', (e) => {
-  e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== VER).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
+self.addEventListener('activate', evt => {
+  evt.waitUntil(
+    caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
   );
 });
 
-self.addEventListener('fetch', (e) => {
-  const { request } = e;
-  if (request.method === 'GET' && (request.url.startsWith(self.location.origin) || request.url.includes('cdn.jsdelivr.net'))) {
-    e.respondWith(
-      caches.match(request).then(resp => resp || fetch(request).then(r => {
-        const copy = r.clone();
-        caches.open(VER).then(c => c.put(request, copy));
-        return r;
-      }).catch(() => caches.match('./index.html')))
+self.addEventListener('fetch', evt => {
+  if (evt.request.method !== 'GET') return;
+  const url = new URL(evt.request.url);
+  if (url.origin === location.origin) {
+    // cache-first for same-origin
+    evt.respondWith(
+      caches.match(evt.request).then(cached => {
+        return cached || fetch(evt.request).catch(() => caches.match('/index.html'));
+      })
+    );
+  } else {
+    // network-first for cross-origin
+    evt.respondWith(
+      fetch(evt.request).catch(() => caches.match(evt.request))
     );
   }
 });
