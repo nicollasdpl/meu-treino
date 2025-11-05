@@ -1,20 +1,10 @@
-/* ===========================
-   Firebase (opcional)
-   ===========================
+// firebase.js — drop-in
+// Liga/desliga Firebase por flag e expõe helpers de Auth/Sync.
 
-   - Não exige login para usar o app
-   - Só aparece na aba Perfil
-   - Quando enableFirebase = true:
-       * Login Google (popup com fallback redirect)
-       * Sincroniza:
-         users/{uid}/sessoes/{YYYY-MM-DD}
-         users/{uid}/habitos/{YYYY-MM-DD}
-         users/{uid}/fotos/{id}
-*/
+export const enableFirebase = true;           // <<< LIGADO
+export const ENABLE_FIREBASE = enableFirebase; // compat
 
-export const enableFirebase = false; // <- mude para true se quiser sincronizar
-
-const cfg = {
+const config = {
   apiKey: "AIzaSyAEewjrcLxpXSZMoOPo4nkuTg3lTZI-J78",
   authDomain: "meu-treino-e4592.firebaseapp.com",
   projectId: "meu-treino-e4592",
@@ -24,80 +14,81 @@ const cfg = {
   measurementId: "G-QW4TNPPE3X"
 };
 
-let app, auth, db, storage, user;
-let mod = {};
+let app, auth, db, storage, user = null;
+const listeners = new Set();
 
-async function boot(){
-  if(!enableFirebase || app) return;
-  const [{ initializeApp }, A, F, S] = await Promise.all([
-    import('https://www.gstatic.com/firebasejs/12.3.0/firebase-app.js'),
-    import('https://www.gstatic.com/firebasejs/12.3.0/firebase-auth.js'),
-    import('https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore.js'),
-    import('https://www.gstatic.com/firebasejs/12.3.0/firebase-storage.js'),
+async function boot() {
+  if (!enableFirebase) throw new Error("Firebase desativado");
+  if (app) return { app, auth, db, storage };
+  const v = "10.12.2";
+  const [{ initializeApp }] =
+    await Promise.all([
+      import(`https://www.gstatic.com/firebasejs/${v}/firebase-app.js`)
+    ]);
+  const [
+    { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged },
+    { getFirestore, doc, setDoc, getDoc, collection, getDocs, query, where },
+    { getStorage, ref, uploadBytes, getDownloadURL }
+  ] = await Promise.all([
+    import(`https://www.gstatic.com/firebasejs/${v}/firebase-auth.js`),
+    import(`https://www.gstatic.com/firebasejs/${v}/firebase-firestore.js`),
+    import(`https://www.gstatic.com/firebasejs/${v}/firebase-storage.js`)
   ]);
-  app = initializeApp(cfg);
-  auth = A.getAuth(app);
-  db = F.getFirestore(app);
-  storage = S.getStorage(app);
-  mod = { A, F, S };
-}
 
-export async function onAuthChange(cb){
-  if(!enableFirebase){ cb(null); return; }
-  await boot();
-  mod.A.onAuthStateChanged(auth, (u)=>{ user = u||null; cb(user); });
-}
+  app = initializeApp(config);
+  auth = getAuth(app);
+  db = getFirestore(app);
+  storage = getStorage(app);
 
-export async function loginWithGoogle(){
-  if(!enableFirebase) return null;
-  await boot();
-  const provider = new mod.A.GoogleAuthProvider();
-  try{ const r = await mod.A.signInWithPopup(auth, provider); user=r.user; return user; }
-  catch{ await mod.A.signInWithRedirect(auth, provider); return null; }
-}
-export async function logout(){ if(enableFirebase && auth) await mod.A.signOut(auth); }
+  // Trata retorno de redirect (iOS/PWA)
+  try { await getRedirectResult(auth); } catch {}
 
-function getLocal(){ try{ return JSON.parse(localStorage.getItem('sessoes')||'[]'); }catch{ return []; } }
-function setLocal(a){ localStorage.setItem('sessoes', JSON.stringify(a)); }
-
-export async function pushSession(sess){
-  if(!enableFirebase || !user) return;
-  await boot();
-  const ref = mod.F.doc(db, 'users', user.uid, 'sessoes', sess.data);
-  await mod.F.setDoc(ref, sess, { merge:true });
-}
-export async function pushHabits(date, habits){
-  if(!enableFirebase || !user) return;
-  await boot();
-  const ref = mod.F.doc(db, 'users', user.uid, 'habitos', date);
-  await mod.F.setDoc(ref, habits, { merge:true });
-}
-export async function uploadPhoto(fileBlob, ym){
-  if(!enableFirebase || !user) return null;
-  await boot();
-  const id = Date.now().toString(36);
-  const path = `users/${user.uid}/fotos/${ym}/${id}.jpg`;
-  const r = mod.S.ref(storage, path);
-  await mod.S.uploadBytes(r, fileBlob);
-  const url = await mod.S.getDownloadURL(r);
-  const metaRef = mod.F.doc(db, 'users', user.uid, 'fotos', id);
-  await mod.F.setDoc(metaRef, { url, ym, createdAt: Date.now() }, { merge:true });
-  return url;
-}
-
-export async function pullAndMerge(){
-  if(!enableFirebase || !user) return;
-  await boot();
-  const q = mod.F.collection(db, 'users', user.uid, 'sessoes');
-  const snap = await mod.F.getDocs(q);
-  const cloud=[]; snap.forEach(d=> cloud.push(d.data()));
-  const local=getLocal();
-  const byDate = new Map();
-  const setsLen = x=> (x.exercicios||[]).reduce((acc,e)=>acc+(e.sets?.length||0),0);
-  [...local, ...cloud].forEach(s=>{
-    const old=byDate.get(s.data);
-    if(!old) byDate.set(s.data,s);
-    else byDate.set(s.data, setsLen(old)>=setsLen(s)?old:s);
+  onAuthStateChanged(auth, (u) => {
+    user = u || null;
+    listeners.forEach(fn => fn(user));
   });
-  setLocal([...byDate.values()].sort((a,b)=>a.data.localeCompare(b.data)));
+
+  // Exponho alguns helpers no objeto para reuso
+  Object.assign(boot, {
+    GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut,
+    doc, setDoc, getDoc, collection, getDocs, query, where, ref, uploadBytes, getDownloadURL
+  });
+
+  return { app, auth, db, storage };
 }
+
+export function onAuthChange(cb) {
+  listeners.add(cb);
+  cb(user);
+}
+
+export function currentUser() { return user; }
+
+export async function loginWithGoogle() {
+  if (!enableFirebase) throw new Error("Firebase desativado");
+  const { auth } = await boot();
+  const { GoogleAuthProvider, signInWithPopup, signInWithRedirect } = boot;
+  const provider = new GoogleAuthProvider();
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (e) {
+    // popup bloqueado? cai no redirect
+    await signInWithRedirect(auth, provider);
+  }
+}
+
+export async function logout() {
+  if (!enableFirebase) return;
+  const { auth } = await boot();
+  await boot.signOut(auth);
+}
+
+/* **************
+ * Opcional: EXEMPLOS de sync (cole quando quiser usar Firestore/Storage)
+ **************
+export async function pushSession(uid, date, payload) {
+  const { db } = await boot();
+  const { doc, setDoc } = boot;
+  await setDoc(doc(db, `users/${uid}/sessoes/${date}`), payload, { merge: true });
+}
+*/
