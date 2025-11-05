@@ -12,7 +12,7 @@
          users/{uid}/fotos/{id}
 */
 
-export const enableFirebase = true; // <- mude para true se quiser sincronizar
+export const enableFirebase = false; // <- mude para true se quiser sincronizar
 
 const cfg = {
   apiKey: "AIzaSyAEewjrcLxpXSZMoOPo4nkuTg3lTZI-J78",
