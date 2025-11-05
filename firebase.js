@@ -1,10 +1,8 @@
-// firebase.js — drop-in
-// Liga/desliga Firebase por flag e expõe helpers de Auth/Sync.
+// firebase.js
+export const enableFirebase = true; // ← se quiser deixar opcional troque para false
 
-export const enableFirebase = true;           // <<< LIGADO
-export const ENABLE_FIREBASE = enableFirebase; // compat
-
-const config = {
+// SUA CONFIG (a mesma do seu projeto)
+const firebaseConfig = {
   apiKey: "AIzaSyAEewjrcLxpXSZMoOPo4nkuTg3lTZI-J78",
   authDomain: "meu-treino-e4592.firebaseapp.com",
   projectId: "meu-treino-e4592",
@@ -14,81 +12,53 @@ const config = {
   measurementId: "G-QW4TNPPE3X"
 };
 
-let app, auth, db, storage, user = null;
-const listeners = new Set();
+let _app,_auth,_fs,_st,_modsLoaded=false;
 
-async function boot() {
-  if (!enableFirebase) throw new Error("Firebase desativado");
-  if (app) return { app, auth, db, storage };
-  const v = "10.12.2";
-  const [{ initializeApp }] =
-    await Promise.all([
-      import(`https://www.gstatic.com/firebasejs/${v}/firebase-app.js`)
-    ]);
-  const [
-    { getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged },
-    { getFirestore, doc, setDoc, getDoc, collection, getDocs, query, where },
-    { getStorage, ref, uploadBytes, getDownloadURL }
-  ] = await Promise.all([
-    import(`https://www.gstatic.com/firebasejs/${v}/firebase-auth.js`),
-    import(`https://www.gstatic.com/firebasejs/${v}/firebase-firestore.js`),
-    import(`https://www.gstatic.com/firebasejs/${v}/firebase-storage.js`)
-  ]);
-
-  app = initializeApp(config);
-  auth = getAuth(app);
-  db = getFirestore(app);
-  storage = getStorage(app);
-
-  // Trata retorno de redirect (iOS/PWA)
-  try { await getRedirectResult(auth); } catch {}
-
-  onAuthStateChanged(auth, (u) => {
-    user = u || null;
-    listeners.forEach(fn => fn(user));
-  });
-
-  // Exponho alguns helpers no objeto para reuso
-  Object.assign(boot, {
-    GoogleAuthProvider, signInWithPopup, signInWithRedirect, signOut,
-    doc, setDoc, getDoc, collection, getDocs, query, where, ref, uploadBytes, getDownloadURL
-  });
-
-  return { app, auth, db, storage };
+async function loadMods(){
+  if(_modsLoaded) return;
+  const app    = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js');
+  const auth   = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js');
+  const store  = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+  const storage= await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js');
+  _app = app.initializeApp(firebaseConfig);
+  _auth = auth.getAuth(_app);
+  _fs   = store.getFirestore(_app);
+  _st   = storage.getStorage(_app);
+  _modsLoaded = true;
+  // tenta capturar resultado de redirects anteriores (iOS bloqueia popup)
+  try{ await auth.getRedirectResult(_auth); }catch{}
+  return {app,auth,store,storage};
 }
 
-export function onAuthChange(cb) {
-  listeners.add(cb);
-  cb(user);
+export async function onAuthChange(cb){
+  if(!enableFirebase){ cb(null); return; }
+  const {auth} = await loadMods();
+  auth.onAuthStateChanged(_auth, u=>cb(u));
 }
 
-export function currentUser() { return user; }
-
-export async function loginWithGoogle() {
-  if (!enableFirebase) throw new Error("Firebase desativado");
-  const { auth } = await boot();
-  const { GoogleAuthProvider, signInWithPopup, signInWithRedirect } = boot;
-  const provider = new GoogleAuthProvider();
-  try {
-    await signInWithPopup(auth, provider);
-  } catch (e) {
-    // popup bloqueado? cai no redirect
-    await signInWithRedirect(auth, provider);
+export async function loginWithGoogle(){
+  if(!enableFirebase) throw new Error('FIREBASE_DISABLED');
+  const {auth} = await loadMods();
+  const provider = new auth.GoogleAuthProvider();
+  provider.setCustomParameters({prompt:'select_account'});
+  try{
+    const res = await auth.signInWithPopup(_auth, provider);
+    return res.user;
+  }catch(e){
+    // fallback para iOS / bloqueio de popup
+    if(String(e.code||'').includes('popup') || String(e.message||'').includes('popup')){
+      await auth.signInWithRedirect(_auth, provider);
+      return null; // redirecionará
+    }
+    throw e;
   }
 }
 
-export async function logout() {
-  if (!enableFirebase) return;
-  const { auth } = await boot();
-  await boot.signOut(auth);
+export async function logout(){
+  if(!enableFirebase) return;
+  const {auth} = await loadMods();
+  await auth.signOut(_auth);
 }
 
-/* **************
- * Opcional: EXEMPLOS de sync (cole quando quiser usar Firestore/Storage)
- **************
-export async function pushSession(uid, date, payload) {
-  const { db } = await boot();
-  const { doc, setDoc } = boot;
-  await setDoc(doc(db, `users/${uid}/sessoes/${date}`), payload, { merge: true });
-}
-*/
+// (Exports opcionais de Firestore/Storage – deixe assim por enquanto)
+export function isFirebaseEnabled(){ return enableFirebase; }
