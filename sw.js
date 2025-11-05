@@ -1,45 +1,49 @@
-const CACHE_NAME = 'meu-treino-static-v1';
+// Service Worker – cache first para estáticos, network first para resto
+// >>> Suba a versão SEMPRE que publicar novas mudanças
+const CACHE_NAME = 'mt-v2025110501';
+
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/style.css',
-  '/app.js',
-  '/charts.js',
-  '/firebase.js',
-  '/manifest.json',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
-  '/icons/apple-touch-icon.png',
-  '/assets/beep.mp3'
+  './',
+  './index.html',
+  './style.css',
+  './app.js',
+  './charts.js',
+  './firebase.js',
+  './manifest.json',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/apple-touch-icon.png',
+  './assets/beep.mp3'
 ];
 
-self.addEventListener('install', evt => {
-  evt.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
+self.addEventListener('install', (e) => {
+  e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(STATIC_ASSETS)).then(()=>self.skipWaiting()));
+});
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    caches.keys().then(keys => Promise.all(keys.map(k => k!==CACHE_NAME && caches.delete(k))))
+      .then(()=> self.clients.claim())
   );
 });
-
-self.addEventListener('activate', evt => {
-  evt.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))))
-      .then(() => self.clients.claim())
-  );
-});
-
-self.addEventListener('fetch', evt => {
-  if (evt.request.method !== 'GET') return;
-  const url = new URL(evt.request.url);
-  if (url.origin === location.origin) {
-    // cache-first for same-origin
-    evt.respondWith(
-      caches.match(evt.request).then(cached => {
-        return cached || fetch(evt.request).catch(() => caches.match('/index.html'));
-      })
+self.addEventListener('fetch', (e) => {
+  const url = new URL(e.request.url);
+  const isStatic = STATIC_ASSETS.some(p => url.pathname.endsWith(p.replace('./','/')));
+  if (isStatic || url.origin === location.origin) {
+    // cache-first para estáticos do mesmo domínio
+    e.respondWith(
+      caches.match(e.request).then(cached => cached || fetch(e.request).then(r=>{
+        const copy = r.clone();
+        caches.open(CACHE_NAME).then(c=>c.put(e.request, copy));
+        return r;
+      }))
     );
   } else {
-    // network-first for cross-origin
-    evt.respondWith(
-      fetch(evt.request).catch(() => caches.match(evt.request))
+    // network-first (ex.: Firebase)
+    e.respondWith(
+      fetch(e.request).then(r=>{
+        const copy = r.clone(); caches.open(CACHE_NAME).then(c=>c.put(e.request, copy));
+        return r;
+      }).catch(()=> caches.match(e.request))
     );
   }
 });
