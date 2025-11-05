@@ -1,6 +1,6 @@
 // Service Worker – cache first para estáticos, network first para resto
 // >>> Suba a versão SEMPRE que publicar novas mudanças
-const CACHE_NAME = 'mt-v2025110501';
+const CACHE_NAME = 'mt-v2025110502';
 
 const STATIC_ASSETS = [
   './',
