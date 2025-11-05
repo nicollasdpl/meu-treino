@@ -3,9 +3,6 @@
    =========================== */
 import { enableFirebase, onAuthChange, loginWithGoogle, logout } from './firebase.js';
 
-// Ponte para Charts/Firebase injetados pelo index.html
-const Bridge = () => window.AppBridge || { Charts:{}, FB:{} };
-
 /* ---------- UTIL ---------- */
 const qs = s => document.querySelector(s);
 const qsa = s => [...document.querySelectorAll(s)];
@@ -712,4 +709,48 @@ import { enableFirebase, onAuthChange, loginWithGoogle, logout, currentUser } fr
   });
 
   btnLogout?.addEventListener('click', async ()=>{ try{ await logout(); }catch(e){} });
+})();
+
+// === Auth UI wiring (login opcional via Firebase) ===
+(function wireAuthUI(){
+  const btnLogin  = document.getElementById('btnLogin');
+  const btnLogout = document.getElementById('btnLogout');
+  const foto      = document.getElementById('fotoPerfil');
+  const nome      = document.getElementById('nomePerfil');
+  const email     = document.getElementById('emailPerfil');
+
+  // estado inicial
+  btnLogout?.classList.add('hidden');
+  if (btnLogin) btnLogin.disabled = !enableFirebase;
+
+  onAuthChange((u)=>{
+    if (u) {
+      // logado
+      nome && (nome.textContent  = u.displayName || 'Logado');
+      email && (email.textContent = u.email || '');
+      foto &&  (foto.src = u.photoURL || 'icons/apple-touch-icon.png');
+      btnLogin?.classList.add('hidden');
+      btnLogout?.classList.remove('hidden');
+    } else {
+      // offline
+      nome && (nome.textContent  = 'Modo offline');
+      email && (email.textContent = '—');
+      foto &&  (foto.src = 'icons/apple-touch-icon.png');
+      if (enableFirebase) btnLogin?.classList.remove('hidden');
+      btnLogout?.classList.add('hidden');
+    }
+  });
+
+  btnLogin?.addEventListener('click', async ()=>{
+    if (!enableFirebase) {
+      alert('Sincronização desativada. Abra firebase.js e ligue enableFirebase = true.');
+      return;
+    }
+    try { await loginWithGoogle(); }
+    catch (e) { console.error(e); alert('Falha no login. Tente novamente.'); }
+  });
+
+  btnLogout?.addEventListener('click', async ()=>{
+    try { await logout(); } catch {}
+  });
 })();
