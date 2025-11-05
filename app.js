@@ -1,6 +1,7 @@
 /* ===========================
    Meu Treino – App principal
    =========================== */
+import { enableFirebase, onAuthChange, loginWithGoogle, logout } from './firebase.js';
 
 // Ponte para Charts/Firebase injetados pelo index.html
 const Bridge = () => window.AppBridge || { Charts:{}, FB:{} };
