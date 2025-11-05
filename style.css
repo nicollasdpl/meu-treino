@@ -106,3 +106,42 @@ canvas{max-width:100%}
 
 .grid-fotos{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
 .grid-fotos img{width:100%;border-radius:12px;border:1px solid var(--border);box-shadow:var(--shadow)}
+
+/* ===== Fix layout de séries: horizontal como no Hevy ===== */
+.sets{
+  display:flex;
+  gap:10px;
+  overflow-x:auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.set{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:10px;
+  border:1px dashed var(--border);
+  border-radius:12px;
+  background:color-mix(in oklab, var(--card) 94%, transparent);
+  min-width: 260px; /* cada set fica uma “pílula” horizontal */
+}
+
+.set input[type="number"]{
+  font-size:16px;       /* evita zoom no iOS */
+  padding:8px 10px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:transparent;
+  color:var(--text);
+}
+
+.set input[placeholder^="kg"]{ width:88px; }   /* Peso */
+.set input[placeholder^="rep"]{ width:72px; }  /* Reps */
+.set input[placeholder^="RIR"]{ width:60px; }  /* RIR opcional */
+
+.set .done{
+  margin-left:auto;
+  width:24px;height:24px;
+  transform:translateY(0); /* não “desce” mais */
+}
+
