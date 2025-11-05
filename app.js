@@ -668,3 +668,47 @@ window.addEventListener('keydown', (e)=>{
     a.download = `sessoes_${todayStr()}.json`; a.click();
   }
 });
+
+// === Auth UI wiring ===
+import { enableFirebase, onAuthChange, loginWithGoogle, logout, currentUser } from './firebase.js';
+
+(function wireAuthUI(){
+  const btnLogin  = document.getElementById('btnLogin');
+  const btnLogout = document.getElementById('btnLogout');
+  const foto      = document.getElementById('fotoPerfil');
+  const nome      = document.getElementById('nomePerfil');
+  const email     = document.getElementById('emailPerfil');
+
+  // Estado inicial
+  if (btnLogin)  btnLogin.disabled  = !enableFirebase; // se false, mostra que está off
+  if (btnLogout) btnLogout.classList.add('hidden');
+
+  onAuthChange((u)=>{
+    if (u) {
+      // Logado
+      if (nome)  nome.textContent  = u.displayName || 'Logado';
+      if (email) email.textContent = u.email || '';
+      if (foto)  foto.src = u.photoURL || 'icons/apple-touch-icon.png';
+      btnLogin?.classList.add('hidden');
+      btnLogout?.classList.remove('hidden');
+    } else {
+      // Offline
+      if (nome)  nome.textContent  = 'Modo offline';
+      if (email) email.textContent = '—';
+      if (foto)  foto.src = 'icons/apple-touch-icon.png';
+      if (enableFirebase) btnLogin?.classList.remove('hidden');
+      btnLogout?.classList.add('hidden');
+    }
+  });
+
+  btnLogin?.addEventListener('click', async ()=>{
+    if (!enableFirebase) {
+      alert('Sincronização desativada. Abra firebase.js e ligue o enableFirebase = true.');
+      return;
+    }
+    try { await loginWithGoogle(); }
+    catch (e) { alert('Falha no login. Tente novamente.'); console.error(e); }
+  });
+
+  btnLogout?.addEventListener('click', async ()=>{ try{ await logout(); }catch(e){} });
+})();
