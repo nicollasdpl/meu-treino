@@ -116,25 +116,23 @@
       </div>
     </section>
 
-    <!-- PERFIL -->
-    <section id="perfil" class="pagina hidden">
-      <h2>Perfil</h2>
-
-      <div class="card profile">
-        <img id="fotoPerfil" class="avatar" src="icons/apple-touch-icon.png" alt="foto" />
+    <!-- PERFIL / HÁBITOS -->
+    <section id="perfil" class="pagina" style="display:none">
+      <h2>👤 Perfil</h2>
+      <div class="card grid-2">
         <div>
-          <div id="nomePerfil" class="strong">Modo offline</div>
-          <div id="emailPerfil" class="muted small">—</div>
+          <p><b>Status:</b> <span id="userStatus" class="muted">Inicializando…</span></p>
+          <p><b>Sincronização:</b> <span id="syncInfo" class="muted">—</span></p>
+          <div class="stack">
+            <button id="btnLogin" class="primary">Entrar com Google</button>
+            <button id="btnLogout" class="ghost" style="display:none">Sair</button>
+          </div>
         </div>
-
-        <!-- botões à direita -->
-        <div style="margin-left:auto; display:flex; gap:8px">
-          <button id="btnLogin"  class="primary">Entrar</button>
-          <button id="btnLogout" class="ghost hidden">Sair</button>
+        <div>
+          <h3>Sobre</h3>
+          <p>Treino, calendário, evolução e hábitos funcionam 100% offline. Ao entrar, seus dados são sincronizados com o Firebase.</p>
         </div>
       </div>
-
-      <!-- ... mantém seus hábitos e demais cards daqui pra baixo ... -->
       <div class="card">
         <h3>Hábitos diários</h3>
         <div id="habitsList" class="habits-list"></div>

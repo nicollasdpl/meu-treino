@@ -8,7 +8,7 @@
   alterações quando o usuário opta por fazer login.
 */
 
-import { enableFirebase, onAuthChange, loginWithGoogle, logout } from './firebase.js';
+import { enableFirebase, initFirebase, loginWithGoogle, logout, pullAllSessionsAndMerge, pushSession, setHabit, firebaseOk, fb } from './firebase.js';
 import { computeMaxLoadData, compute1RMData, computeWeeklyVolumeData, computePRs, drawLineChart, drawBarChart } from './charts.js';
 
 /* === Utilitários de consulta de elementos === */
@@ -117,6 +117,8 @@ function updateHabit(dateStr, key, val){
   if(!habits[dateStr]) habits[dateStr] = {};
   habits[dateStr][key] = val;
   setHabits(habits);
+  // sincronizar com Firebase, se disponível
+  if(enableFirebase) setHabit(dateStr, key, val).catch(() => {});
 }
 function computeHabitStreak(key){
   const habits = getHabits();
@@ -140,7 +142,6 @@ function computeHabitStreak(key){
   if(saved === 'dark'){ document.documentElement.classList.add('dark'); }
   qs('#btnTheme').textContent = document.documentElement.classList.contains('dark') ? '☀️' : '🌙';
 })();
-
 qs('#btnTheme').addEventListener('click', () => {
   document.documentElement.classList.toggle('dark');
   const dark = document.documentElement.classList.contains('dark');
@@ -727,6 +728,8 @@ function salvarSessaoAtual(duracaoParam){
   setTimeout(() => qs('#statusSave').textContent = '', 2000);
   desenharGraficos();
   preencherSessoesDetalhe();
+  // salva na nuvem
+  if(enableFirebase) pushSession(nova).catch(() => {});
   // encerra timer principal
   stopSession();
 }
@@ -844,8 +847,34 @@ const habits = [
   { key:'sono7', label:'Dormir > 7h' }
 ];
 function atualizarPerfilUI(){
+  // Status de login
+  const statusEl = qs('#userStatus');
+  const syncEl = qs('#syncInfo');
+  if(enableFirebase){
+    if(firebaseOk && fb.user){
+      statusEl.textContent = `Logado: ${fb.user.displayName || fb.user.email}`;
+      qs('#btnLogin').style.display = 'none';
+      qs('#btnLogout').style.display = '';
+      syncEl.textContent = 'Sincronização: Conectado';
+    }else if(firebaseOk){
+      statusEl.textContent = 'Não logado';
+      qs('#btnLogin').style.display = '';
+      qs('#btnLogout').style.display = 'none';
+      syncEl.textContent = 'Sincronização: Offline';
+    }else{
+      statusEl.textContent = 'Firebase indisponível (modo local)';
+      qs('#btnLogin').style.display = 'none';
+      qs('#btnLogout').style.display = 'none';
+      syncEl.textContent = 'Sincronização: —';
+    }
+  }else{
+    statusEl.textContent = 'Modo local';
+    syncEl.textContent = 'Sincronização desativada';
+    qs('#btnLogin').style.display = 'none';
+    qs('#btnLogout').style.display = 'none';
+  }
+  // Construir lista de hábitos
   const listEl = qs('#habitsList');
-  if(!listEl) return;
   listEl.innerHTML = '';
   const todayStr = new Date().toISOString().slice(0,10);
   habits.forEach(h => {
@@ -866,6 +895,13 @@ function atualizarPerfilUI(){
     listEl.appendChild(item);
   });
 }
+qs('#btnLogin').addEventListener('click', async () => {
+  try{ await loginWithGoogle(); }catch(_){ alert('Falha no login'); }
+});
+qs('#btnLogout').addEventListener('click', async () => {
+  try{ await logout(); }catch(_){}
+});
+
 qs('#btnExport').addEventListener('click', () => {
   const blob = new Blob([localStorage.getItem('sessoes') || '[]'], { type:'application/json' });
   const a = document.createElement('a');
@@ -896,6 +932,17 @@ function fmtDuracao(sec){
     return `Hoje é ${new Date().toLocaleDateString()} · Treino do dia: ${nome}`;
   }
   qs('#subheader').textContent = textoTreinoHoje();
+  // inicia Firebase e define callback de mudança de usuário
+  await initFirebase(async (user) => {
+    // quando logar, mescla sessões locais
+    if(user){
+      await pullAllSessionsAndMerge(getSessions, setSessions);
+    }
+    atualizarPerfilUI();
+    atualizarResumoHome();
+    desenharGraficos();
+    preencherSessoesDetalhe();
+  });
   // popule listas iniciais
   montarExercicios('segunda');
   popularListaExerciciosChart();
@@ -907,48 +954,4 @@ function fmtDuracao(sec){
   if('serviceWorker' in navigator){
     try{ await navigator.serviceWorker.register('sw.js'); }catch(_){}
   }
-})();
-
-// === Auth UI wiring (login opcional via Firebase) ===
-(function wireAuthUI(){
-  const btnLogin  = document.getElementById('btnLogin');
-  const btnLogout = document.getElementById('btnLogout');
-  const foto      = document.getElementById('fotoPerfil');
-  const nome      = document.getElementById('nomePerfil');
-  const email     = document.getElementById('emailPerfil');
-
-  // estado inicial
-  btnLogout?.classList.add('hidden');
-  if (btnLogin) btnLogin.disabled = !enableFirebase;
-
-  onAuthChange((u)=>{
-    if (u) {
-      // logado
-      nome && (nome.textContent  = u.displayName || 'Logado');
-      email && (email.textContent = u.email || '');
-      foto &&  (foto.src = u.photoURL || 'icons/apple-touch-icon.png');
-      btnLogin?.classList.add('hidden');
-      btnLogout?.classList.remove('hidden');
-    } else {
-      // offline
-      nome && (nome.textContent  = 'Modo offline');
-      email && (email.textContent = '—');
-      foto &&  (foto.src = 'icons/apple-touch-icon.png');
-      if (enableFirebase) btnLogin?.classList.remove('hidden');
-      btnLogout?.classList.add('hidden');
-    }
-  });
-
-  btnLogin?.addEventListener('click', async ()=>{
-    if (!enableFirebase) {
-      alert('Sincronização desativada. Abra firebase.js e ligue enableFirebase = true.');
-      return;
-    }
-    try { await loginWithGoogle(); }
-    catch (e) { console.error(e); alert('Falha no login. Tente novamente.'); }
-  });
-
-  btnLogout?.addEventListener('click', async ()=>{
-    try { await logout(); } catch {}
-  });
 })();
