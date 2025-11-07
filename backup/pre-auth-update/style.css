@@ -158,31 +158,3 @@ nav button{
 
 /* Badge de PR */
 .pr-badge{margin-left:4px;color:var(--success);font-size:18px;line-height:1}
-/* --- Séries em linha (scroll no mobile) --- */
-.sets{
-  display:flex !important;
-  gap:12px;
-  overflow-x:auto;
-  padding-bottom:6px;
-  scroll-snap-type:x proximity;
-}
-.sets > .set{
-  flex:0 0 clamp(220px, 75vw, 280px);
-}
-.set{
-  display:grid;
-  grid-template-columns:auto 1fr 1fr 1fr auto;
-  gap:8px;
-  align-items:center;
-  min-width:200px; /* garante 3 cartões lado a lado com rolagem */
-  border:1px dashed var(--border);
-  border-radius:10px;
-  padding:8px;
-  background:color-mix(in oklab, var(--card) 94%, transparent);
-}
-.set input{ font-size:16px } /* evita zoom no iPhone */
-.sets::-webkit-scrollbar{height:6px}
-.sets::-webkit-scrollbar-thumb{
-  background:color-mix(in oklab, var(--border) 80%, transparent);
-  border-radius:999px;
-}
