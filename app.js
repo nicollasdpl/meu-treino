@@ -418,6 +418,85 @@ function ensureTonelagemBox(){
   return box;
 }
 
+function escapeAttr(val){
+  return String(val ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function renderSetRow(nome, index, data = {}){
+  const peso = data?.peso ?? '';
+  const reps = data?.reps ?? '';
+  const rir = data?.rir ?? '';
+  return `
+    <div class="set" data-ex="${escapeAttr(nome)}" data-set="${index}">
+      <span class="tag">S${index + 1}</span>
+      <input type="number" step="0.5" placeholder="kg" class="inp peso" data-ex="${escapeAttr(nome)}" data-set="${index}" value="${escapeAttr(peso)}" />
+      <input type="number" placeholder="reps" class="inp reps" data-ex="${escapeAttr(nome)}" data-set="${index}" value="${escapeAttr(reps)}" />
+      <input type="number" placeholder="RIR" class="inp rir" data-ex="${escapeAttr(nome)}" data-set="${index}" value="${escapeAttr(rir)}" />
+      <button class="tick" type="button" data-ex="${escapeAttr(nome)}" data-set="${index}" aria-label="Marcar série">✓</button>
+    </div>
+  `;
+}
+
+function createSetRow(nome, index, data = {}){
+  const tpl = document.createElement('template');
+  tpl.innerHTML = renderSetRow(nome, index, data).trim();
+  return tpl.content.firstElementChild;
+}
+
+function wireSetRow(row){
+  if(!row || row.dataset.wired) return;
+  row.dataset.wired = '1';
+  const nome = row.dataset.ex;
+  const tick = row.querySelector('.tick');
+  tick?.addEventListener('click', () => {
+    startSessionIfNeeded();
+    row.classList.toggle('done');
+    if(row.classList.contains('done')){
+      row.dataset.ts = new Date().toISOString();
+    }else{
+      delete row.dataset.ts;
+    }
+    iniciarDescansoAuto();
+    atualizarTonelagemDoDia();
+    if(nome) atualizarPrBadges(nome);
+  });
+  row.querySelectorAll('.inp').forEach(inp => {
+    const nomeEx = inp.dataset.ex;
+    inp.addEventListener('input', () => {
+      atualizarTonelagemDoDia();
+      if(nomeEx) atualizarPrBadges(nomeEx);
+    });
+    if(row.dataset.set === '0'){
+      inp.addEventListener('change', () => {
+        const field = inp.classList.contains('peso') ? '.peso' : inp.classList.contains('reps') ? '.reps' : '.rir';
+        const val = inp.value;
+        qsa(`.sets[data-ex="${CSS.escape(nomeEx)}"] .set`).forEach(other => {
+          if(other === row) return;
+          const target = other.querySelector(field);
+          if(target && !target.value) target.value = val;
+        });
+        atualizarTonelagemDoDia();
+        if(nomeEx) atualizarPrBadges(nomeEx);
+      });
+    }
+  });
+}
+
+function ensureSetRows(nomeEx, count){
+  const setsContainer = qs(`.sets[data-ex="${CSS.escape(nomeEx)}"]`);
+  if(!setsContainer) return;
+  while(setsContainer.querySelectorAll('.set').length < count){
+    const i = setsContainer.querySelectorAll('.set').length;
+    const row = createSetRow(nomeEx, i);
+    setsContainer.appendChild(row);
+    wireSetRow(row);
+  }
+}
+
 /** Monta os cartões de exercícios para o dia selecionado. */
 function montarExercicios(diaKey){
   const arr = TREINOS[diaKey] || [];
@@ -433,7 +512,12 @@ function montarExercicios(diaKey){
     // última entrada para prefill
     const last = ultimaEntrada(ex.nome);
     // base sets: clone das últimas sets ou padrão vazio
-    const baseSets = last?.sets?.length ? last.sets : [ {peso:'', reps:'', rir:'', done:false}, {peso:'', reps:'', rir:'', done:false}, {peso:'', reps:'', rir:'', done:false} ];
+    const baseSets = last?.sets?.length ? last.sets.map(s => ({ peso: s.peso ?? '', reps: s.reps ?? '', rir: s.rir ?? '' })) : [
+      { peso:'', reps:'', rir:'' },
+      { peso:'', reps:'', rir:'' },
+      { peso:'', reps:'', rir:'' }
+    ];
+    const totalSets = Math.max(3, baseSets.length);
     const card = document.createElement('div');
     card.className = 'ex-card';
     // sugestão de próximo peso
@@ -444,90 +528,21 @@ function montarExercicios(diaKey){
         <div class="muted next-peso">Próximo: ${sug ? sug : '-'} kg</div>
       </div>
       <div class="sets" data-ex="${ex.nome}">
-        ${[0,1,2].map(i => `
-          <div class="set" data-set="${i}">
-            <span class="tag">S${i+1}</span>
-            <input type="number" step="0.5" placeholder="kg" class="inp peso" data-ex="${ex.nome}" data-set="${i}" value="${baseSets[i]?.peso ?? ''}" />
-            <input type="number" placeholder="reps" class="inp reps" data-ex="${ex.nome}" data-set="${i}" value="${baseSets[i]?.reps ?? ''}" />
-            <input type="number" placeholder="RIR" class="inp rir" data-ex="${ex.nome}" data-set="${i}" value="${baseSets[i]?.rir ?? ''}" />
-            <button class="tick" type="button" data-ex="${ex.nome}" data-set="${i}" aria-label="Marcar série">✓</button>
-          </div>
-        `).join('')}
+        ${Array.from({ length: totalSets }, (_, i) => renderSetRow(ex.nome, i, baseSets[i] || {})).join('')}
       </div>
       <button class="add-set small ghost" type="button" data-ex="${ex.nome}">+ Série</button>
       <div class="obs-wrap"><textarea rows="1" placeholder="obs" data-field="obs" data-ex="${ex.nome}">${last?.obs ?? ''}</textarea></div>
     `;
     listaExEl.appendChild(card);
-  });
-  // handlers para cada exercício
-  listaExEl.querySelectorAll('button.tick').forEach(btn => {
-    btn.addEventListener('click', () => {
-      startSessionIfNeeded();
-      const setEl = btn.closest('.set');
-      setEl.classList.toggle('done');
-      // registra timestamp da conclusão
-      if(setEl.classList.contains('done')){
-        setEl.dataset.ts = new Date().toISOString();
-      }else{
-        delete setEl.dataset.ts;
-      }
-      iniciarDescansoAuto();
-      atualizarTonelagemDoDia();
-      atualizarPrBadges(btn.dataset.ex);
-    });
-  });
-  // input do set 0 propaga para sets seguintes
-  listaExEl.querySelectorAll('.set[data-set="0"] .inp').forEach(inp => {
-    inp.addEventListener('change', () => {
-      const nome = inp.dataset.ex;
-      const field = inp.classList.contains('peso') ? '.peso' : inp.classList.contains('reps') ? '.reps' : '.rir';
-      const val = inp.value;
-      [1,2].forEach(i => {
-        const tgt = listaExEl.querySelector(`.sets[data-ex="${CSS.escape(nome)}"] .set[data-set="${i}"] ${field}`);
-        if(tgt && !tgt.value) tgt.value = val;
-      });
-      atualizarTonelagemDoDia();
-      atualizarPrBadges(nome);
-    });
-  });
-  // qualquer digitação recalcula tonelagem e PRs
-  listaExEl.querySelectorAll('.inp').forEach(inp => inp.addEventListener('input', () => {
-    atualizarTonelagemDoDia();
-    atualizarPrBadges(inp.dataset.ex);
-  }));
-  // adicionar série extra
-  listaExEl.querySelectorAll('.add-set').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const nome = btn.dataset.ex;
-      const setsContainer = btn.previousElementSibling;
-      const currentSets = setsContainer.querySelectorAll('.set');
-      const i = currentSets.length;
-      const row = document.createElement('div');
-      row.className = 'set';
-      row.dataset.set = i;
-      row.innerHTML = `
-        <span class="tag">S${i+1}</span>
-        <input type="number" step="0.5" placeholder="kg" class="inp peso" data-ex="${nome}" data-set="${i}" />
-        <input type="number" placeholder="reps" class="inp reps" data-ex="${nome}" data-set="${i}" />
-        <input type="number" placeholder="RIR" class="inp rir" data-ex="${nome}" data-set="${i}" />
-        <button class="tick" type="button" data-ex="${nome}" data-set="${i}" aria-label="Marcar série">✓</button>
-      `;
-      setsContainer.appendChild(row);
-      // bind novos elementos
-      row.querySelector('.tick').addEventListener('click', () => {
-        startSessionIfNeeded();
-        row.classList.toggle('done');
-        if(row.classList.contains('done')) row.dataset.ts = new Date().toISOString(); else delete row.dataset.ts;
-        iniciarDescansoAuto();
-        atualizarTonelagemDoDia();
-        atualizarPrBadges(nome);
-      });
-      row.querySelectorAll('.inp').forEach(inp => {
-        inp.addEventListener('input', () => {
-          atualizarTonelagemDoDia();
-          atualizarPrBadges(nome);
-        });
-      });
+    const setsContainer = card.querySelector('.sets');
+    setsContainer?.querySelectorAll('.set').forEach(row => wireSetRow(row));
+    const addBtn = card.querySelector('.add-set');
+    addBtn?.addEventListener('click', () => {
+      const nome = addBtn.dataset.ex;
+      const current = setsContainer?.querySelectorAll('.set').length ?? 0;
+      const row = createSetRow(nome, current);
+      setsContainer?.appendChild(row);
+      wireSetRow(row);
     });
   });
   ensureTonelagemBox();
@@ -557,15 +572,21 @@ function preencherComUltima(diaKey){
   arr.forEach(ex => {
     const last = hist.slice().reverse().map(s => s.exercicios || []).flat().find(e => e.nome === ex.nome);
     if(last){
+      const totalSets = Array.isArray(last.sets) ? last.sets.length : 0;
+      if(totalSets > 0) ensureSetRows(ex.nome, totalSets);
       last.sets?.forEach((s,i) => {
-        const p = qs(`.sets[data-ex="${CSS.escape(ex.nome)}"] .set[data-set="${i}"] .peso`);
-        const r = qs(`.sets[data-ex="${CSS.escape(ex.nome)}"] .set[data-set="${i}"] .reps`);
-        const rir = qs(`.sets[data-ex="${CSS.escape(ex.nome)}"] .set[data-set="${i}"] .rir`);
+        const rowSel = `.sets[data-ex="${CSS.escape(ex.nome)}"] .set[data-set="${i}"]`;
+        const p = qs(`${rowSel} .peso`);
+        const r = qs(`${rowSel} .reps`);
+        const rir = qs(`${rowSel} .rir`);
         if(p) p.value = s.peso ?? '';
         if(r) r.value = s.reps ?? '';
         if(rir) rir.value = s.rir ?? '';
-        const row = qs(`.sets[data-ex="${CSS.escape(ex.nome)}"] .set[data-set="${i}"]`);
-        row?.classList.toggle('done', !!s.done);
+        const row = qs(rowSel);
+        if(row){
+          row.classList.remove('done');
+          delete row.dataset.ts;
+        }
       });
       const obs = qs(`textarea[data-field="obs"][data-ex="${CSS.escape(ex.nome)}"]`);
       if(obs) obs.value = last.obs ?? '';
