@@ -160,27 +160,34 @@ nav button{
 .pr-badge{margin-left:4px;color:var(--success);font-size:18px;line-height:1}
 /* --- Séries em linha (scroll no mobile) --- */
 .sets{
-  display:flex;
+  display:flex !important;
+  flex-flow:row nowrap;
+  align-items:stretch;
   gap:12px;
   overflow-x:auto;
-  padding-bottom:6px;
+  padding-bottom:8px;
+  margin-bottom:4px;
+  scroll-snap-type:x proximity;
+}
+.sets > .set{
+  flex:0 0 clamp(240px, 80vw, 320px);
+  scroll-snap-align:start;
 }
 .set{
-  min-width:190px; /* garante 3 cartões lado a lado com rolagem */
+  display:grid;
+  grid-template-columns:auto repeat(3, minmax(68px, 1fr)) auto;
+  gap:8px;
+  align-items:center;
+  min-width:0;
   border:1px dashed var(--border);
   border-radius:10px;
-  padding:8px;
+  padding:10px;
   background:color-mix(in oklab, var(--card) 94%, transparent);
 }
-.set .top{
-  display:grid;
-  grid-template-columns: 1fr 1fr auto; /* peso | reps | checkbox */
-  align-items:center;
-  gap:8px;
-}
 .set input{ font-size:16px } /* evita zoom no iPhone */
-.badge{
-  background:rgba(255,255,255,.08);
-  border:1px solid var(--border);
-  padding:4px 8px; border-radius:999px; font-size:12px;
+.sets::-webkit-scrollbar{height:6px}
+.sets::-webkit-scrollbar-thumb{
+  background:color-mix(in oklab, var(--border) 80%, transparent);
+  border-radius:999px;
 }
+.sets{scrollbar-width:thin;scrollbar-color:color-mix(in oklab, var(--border) 80%, transparent) transparent}
